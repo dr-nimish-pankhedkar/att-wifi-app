@@ -40,13 +40,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 
-  let matched: (typeof profiles)[0] | null = null;
-  for (const profile of profiles) {
-    if (await bcrypt.compare(body.pin, profile.pin_hash)) {
-      matched = profile;
-      break;
-    }
-  }
+  // Run all comparisons in parallel — total time ≈ one bcrypt call regardless of staff count
+  const comparisons = await Promise.all(
+    profiles.map(async (p) => ({ profile: p, ok: await bcrypt.compare(body.pin, p.pin_hash) }))
+  );
+  const matched = comparisons.find((r) => r.ok)?.profile ?? null;
 
   if (!matched) {
     return NextResponse.json({ error: 'Incorrect PIN. Please try again.' }, { status: 401 });

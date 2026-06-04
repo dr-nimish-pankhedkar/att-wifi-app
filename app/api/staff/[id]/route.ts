@@ -26,7 +26,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     if (!/^\d{4}$/.test(body.pin)) {
       return NextResponse.json({ error: 'PIN must be exactly 4 digits' }, { status: 400 });
     }
-    updates.pin_hash = await bcrypt.hash(body.pin, 12);
+    updates.pin_hash = await bcrypt.hash(body.pin, 10);
   }
 
   const { data, error } = await supabase

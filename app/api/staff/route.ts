@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'PIN must be exactly 4 digits' }, { status: 400 });
   }
 
-  const pin_hash = await bcrypt.hash(body.pin, 12);
+  const pin_hash = await bcrypt.hash(body.pin, 10);
 
   // Create a stub auth user so profiles FK works
   const supabase = createAdminClient();
