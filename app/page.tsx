@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import Image from 'next/image';
 import { toast } from 'sonner';
 import PinPad from '@/components/kiosk/PinPad';
 import SuccessModal from '@/components/kiosk/SuccessModal';
@@ -73,13 +72,11 @@ export default function KioskPage() {
       {/* Top: logo + company + clock */}
       <div className="text-center w-full pt-4 flex flex-col items-center gap-2">
         {logoUrl && (
-          <Image
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
             src={logoUrl}
             alt={companyName}
-            width={72}
-            height={72}
-            className="object-contain rounded-xl"
-            priority
+            className="w-16 h-16 object-contain rounded-xl"
           />
         )}
         <h1 className="text-2xl font-bold text-white tracking-tight">{companyName}</h1>
