@@ -2,13 +2,24 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isPrivateIP, getClientIP } from '@/lib/wifi';
+import { isAllowedIP, getClientIP } from '@/lib/wifi';
 import { todayIST, shiftTimeToday } from '@/lib/time';
 
 export async function POST(request: NextRequest) {
   const ip = getClientIP(request);
+  const supabase = createAdminClient();
 
-  if (!isPrivateIP(ip)) {
+  // Fetch settings (includes allowed_ips)
+  const { data: settings } = await supabase
+    .from('settings')
+    .select('shift_start_time, late_threshold_minutes, allowed_ips')
+    .single();
+
+  const allowlist: string[] = settings?.allowed_ips
+    ? settings.allowed_ips.split(',').map((s: string) => s.trim()).filter(Boolean)
+    : [];
+
+  if (!isAllowedIP(ip, allowlist)) {
     return NextResponse.json(
       { error: 'You must be on office WiFi to check in' },
       { status: 403 }
@@ -20,9 +31,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid PIN' }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
-
-  // Fetch all staff profiles (we must compare bcrypt hashes)
+  // Fetch all staff profiles to bcrypt-compare PINs
   const { data: profiles, error: profileErr } = await supabase
     .from('profiles')
     .select('id, name, designation, photo_url, pin_hash, role');
@@ -31,7 +40,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 
-  // Find matching staff by PIN
   let matched = null;
   for (const profile of profiles) {
     if (await bcrypt.compare(body.pin, profile.pin_hash)) {
@@ -44,19 +52,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Incorrect PIN. Please try again.' }, { status: 401 });
   }
 
-  // Fetch settings
-  const { data: settings } = await supabase
-    .from('settings')
-    .select('shift_start_time, late_threshold_minutes')
-    .single();
-
   const shiftStart = settings?.shift_start_time ?? '09:00:00';
   const lateThreshold = settings?.late_threshold_minutes ?? 15;
 
   const today = todayIST();
   const now = new Date();
 
-  // Check if already checked in today
   const { data: existing } = await supabase
     .from('attendance')
     .select('id, check_in_time, check_out_time, status')
@@ -68,9 +69,7 @@ export async function POST(request: NextRequest) {
   let status: string;
 
   if (!existing || !existing.check_in_time) {
-    // First punch → check-in
     action = 'check_in';
-
     const shiftStartTime = shiftTimeToday(shiftStart);
     const deadline = new Date(shiftStartTime.getTime() + lateThreshold * 60 * 1000);
     status = now <= deadline ? 'present' : 'late';
@@ -82,7 +81,6 @@ export async function POST(request: NextRequest) {
       status,
     });
   } else {
-    // Second punch → check-out
     action = 'check_out';
     status = existing.status;
 
@@ -93,7 +91,6 @@ export async function POST(request: NextRequest) {
       .eq('date', today);
   }
 
-  // Fetch last 7 days
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
   const fromDate = sevenDaysAgo.toISOString().split('T')[0];

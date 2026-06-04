@@ -26,15 +26,11 @@ export async function PUT(request: NextRequest) {
   if (body.shift_start_time !== undefined) updates.shift_start_time = body.shift_start_time;
   if (body.late_threshold_minutes !== undefined)
     updates.late_threshold_minutes = Number(body.late_threshold_minutes);
+  if (body.allowed_ips !== undefined) updates.allowed_ips = body.allowed_ips;
 
   let result;
   if (existing) {
-    result = await supabase
-      .from('settings')
-      .update(updates)
-      .eq('id', existing.id)
-      .select()
-      .single();
+    result = await supabase.from('settings').update(updates).eq('id', existing.id).select().single();
   } else {
     result = await supabase.from('settings').insert(updates).select().single();
   }

@@ -8,8 +8,12 @@ create table if not exists settings (
   company_name text default 'My Company',
   shift_start_time time default '09:00:00',
   late_threshold_minutes int default 15,
+  allowed_ips text default '',   -- comma-separated office public IPs
   updated_at timestamptz default now()
 );
+
+-- If you already ran the schema, add the column with:
+-- alter table settings add column if not exists allowed_ips text default '';
 
 -- Profiles (extends Supabase auth.users)
 create table if not exists profiles (
