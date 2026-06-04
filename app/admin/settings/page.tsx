@@ -58,6 +58,7 @@ export default function SettingsPage() {
 
   async function uploadLogo(file: File) {
     if (!settings) return;
+    if (file.size > 5 * 1024 * 1024) { toast.error('Logo must be under 5 MB'); return; }
     setLogoUploading(true);
     try {
       const ext = file.name.split('.').pop();
@@ -315,7 +316,7 @@ export default function SettingsPage() {
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo(f); }}
                 />
               </label>
-              <p className="text-xs text-muted-foreground">PNG or SVG recommended, max 1 MB.</p>
+              <p className="text-xs text-muted-foreground">PNG or SVG recommended, max 5 MB.</p>
             </CardContent>
           </Card>
 
