@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import Image from 'next/image';
 import { toast } from 'sonner';
 import PinPad from '@/components/kiosk/PinPad';
 import SuccessModal from '@/components/kiosk/SuccessModal';
@@ -25,6 +26,7 @@ export default function KioskPage() {
   const [loading, setLoading] = useState(false);
   const [successData, setSuccessData] = useState<CheckinResult | null>(null);
   const [companyName, setCompanyName] = useState('Attendance');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [now, setNow] = useState(new Date());
 
   // Live clock
@@ -33,11 +35,14 @@ export default function KioskPage() {
     return () => clearInterval(t);
   }, []);
 
-  // Fetch company name
+  // Fetch company name + logo
   useEffect(() => {
     fetch('/api/settings')
       .then((r) => r.json())
-      .then((d) => { if (d.settings?.company_name) setCompanyName(d.settings.company_name); })
+      .then((d) => {
+        if (d.settings?.company_name) setCompanyName(d.settings.company_name);
+        if (d.settings?.logo_url) setLogoUrl(d.settings.logo_url);
+      })
       .catch(() => {});
   }, []);
 
@@ -65,13 +70,23 @@ export default function KioskPage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-900 via-blue-950 to-slate-900 flex flex-col items-center justify-between px-4 py-8 safe-area-inset">
 
-      {/* Top: company + clock */}
-      <div className="text-center w-full pt-4">
+      {/* Top: logo + company + clock */}
+      <div className="text-center w-full pt-4 flex flex-col items-center gap-2">
+        {logoUrl && (
+          <Image
+            src={logoUrl}
+            alt={companyName}
+            width={72}
+            height={72}
+            className="object-contain rounded-xl"
+            priority
+          />
+        )}
         <h1 className="text-2xl font-bold text-white tracking-tight">{companyName}</h1>
         <p className="text-4xl font-mono font-semibold text-white mt-1">
           {formatTimeIST(now)}
         </p>
-        <p className="text-white/50 text-sm mt-1">{formatDateIST(now)}</p>
+        <p className="text-white/50 text-sm">{formatDateIST(now)}</p>
       </div>
 
       {/* Middle: PIN pad */}

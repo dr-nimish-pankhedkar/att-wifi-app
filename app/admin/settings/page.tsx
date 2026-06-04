@@ -1,16 +1,18 @@
 'use client';
 export const dynamic = 'force-dynamic';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import AdminNav from '@/components/admin/AdminNav';
+import ShiftManager, { type Shift } from '@/components/admin/ShiftManager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Save, Plus, Trash2, Wifi, Loader2 } from 'lucide-react';
+import { Save, Plus, Trash2, Wifi, Loader2, Upload, ImageIcon } from 'lucide-react';
 
 interface Settings {
   id: string;
@@ -18,6 +20,7 @@ interface Settings {
   shift_start_time: string;
   late_threshold_minutes: number;
   allowed_ips: string | null;
+  logo_url: string | null;
 }
 
 export default function SettingsPage() {
@@ -27,24 +30,70 @@ export default function SettingsPage() {
   const [ipList, setIpList] = useState<string[]>([]);
   const [newIp, setNewIp] = useState('');
   const [detecting, setDetecting] = useState(false);
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [logoUploading, setLogoUploading] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+
+  const loadShifts = useCallback(() => {
+    fetch('/api/shifts').then((r) => r.json()).then((d) => setShifts(d.shifts ?? []));
+  }, []);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { router.replace('/admin/login'); return; }
-      fetch('/api/settings')
-        .then((r) => r.json())
-        .then((d) => {
-          setSettings(d.settings);
-          const ips = d.settings?.allowed_ips
-            ? d.settings.allowed_ips.split(',').map((s: string) => s.trim()).filter(Boolean)
-            : [];
-          setIpList(ips);
-        })
-        .finally(() => setLoading(false));
+      Promise.all([
+        fetch('/api/settings').then((r) => r.json()),
+        fetch('/api/shifts').then((r) => r.json()),
+      ]).then(([settingsData, shiftsData]) => {
+        setSettings(settingsData.settings);
+        const ips = settingsData.settings?.allowed_ips
+          ? settingsData.settings.allowed_ips.split(',').map((s: string) => s.trim()).filter(Boolean)
+          : [];
+        setIpList(ips);
+        setShifts(shiftsData.shifts ?? []);
+      }).finally(() => setLoading(false));
     });
   }, [router, supabase.auth]);
+
+  async function uploadLogo(file: File) {
+    if (!settings) return;
+    setLogoUploading(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `logo.${ext}`;
+      const { error } = await supabase.storage.from('logos').upload(path, file, { upsert: true });
+      if (error) { toast.error('Logo upload failed'); return; }
+      const { data } = supabase.storage.from('logos').getPublicUrl(path);
+      const logoUrl = data.publicUrl + `?t=${Date.now()}`;
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ logo_url: logoUrl }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setSettings(d.settings);
+        toast.success('Logo updated');
+      }
+    } finally {
+      setLogoUploading(false);
+    }
+  }
+
+  async function removeLogo() {
+    if (!settings) return;
+    const res = await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ logo_url: null }),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      setSettings(d.settings);
+      toast.success('Logo removed');
+    }
+  }
 
   async function detectMyIp() {
     setDetecting(true);
@@ -121,6 +170,7 @@ export default function SettingsPage() {
             {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
           </CardContent></Card>
         ) : settings ? (
+          <>
           <form onSubmit={handleSave} className="space-y-5">
             {/* General settings */}
             <Card>
@@ -225,9 +275,63 @@ export default function SettingsPage() {
 
             <Button type="submit" disabled={saving}>
               <Save className="w-4 h-4 mr-2" />
-              {saving ? 'Saving…' : 'Save All Settings'}
+              {saving ? 'Saving…' : 'Save Settings'}
             </Button>
           </form>
+
+          {/* Company Logo — standalone card, not inside the form */}
+          <Card className="mt-5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ImageIcon className="w-5 h-5" /> Company Logo
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Shown on the kiosk check-in screen above your company name.
+              </p>
+              {settings?.logo_url && (
+                <div className="flex items-center gap-4">
+                  <Image
+                    src={settings.logo_url}
+                    alt="Company logo"
+                    width={80}
+                    height={80}
+                    className="object-contain rounded-md border bg-white p-1"
+                  />
+                  <Button variant="outline" size="sm" onClick={removeLogo}>
+                    Remove
+                  </Button>
+                </div>
+              )}
+              <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 border rounded-md text-sm hover:bg-muted transition-colors">
+                <Upload className="w-4 h-4" />
+                {logoUploading ? 'Uploading…' : settings?.logo_url ? 'Replace Logo' : 'Upload Logo'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={logoUploading}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo(f); }}
+                />
+              </label>
+              <p className="text-xs text-muted-foreground">PNG or SVG recommended, max 1 MB.</p>
+            </CardContent>
+          </Card>
+
+          {/* Shift Templates */}
+          <Card className="mt-5">
+            <CardHeader>
+              <CardTitle>Shift Templates</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                Define Morning, Evening, or Night shifts and assign them to individual staff members.
+              </p>
+              <ShiftManager shifts={shifts} onRefresh={loadShifts} />
+            </CardContent>
+          </Card>
+          </>
         ) : (
           <p className="text-muted-foreground">Failed to load settings.</p>
         )}

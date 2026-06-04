@@ -12,7 +12,7 @@ export async function GET() {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, name, designation, photo_url, role, created_at')
+    .select('id, name, designation, photo_url, role, shift_id, created_at, shifts(id, name, start_time)')
     .eq('role', 'staff')
     .order('name');
 
@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
   if (!body?.name || !body?.pin) {
     return NextResponse.json({ error: 'name and pin are required' }, { status: 400 });
   }
+
 
   if (!/^\d{4}$/.test(body.pin)) {
     return NextResponse.json({ error: 'PIN must be exactly 4 digits' }, { status: 400 });
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
     designation: body.designation ?? null,
     pin_hash,
     photo_url: body.photo_url ?? null,
+    shift_id: body.shift_id ?? null,
     role: 'staff',
   }).select().single();
 

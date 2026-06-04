@@ -1,6 +1,5 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 
@@ -11,44 +10,37 @@ async function requireAdmin() {
 }
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json().catch(() => null);
-  const supabase = createAdminClient();
+  if (!body) return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
 
+  const supabase = createAdminClient();
   const updates: Record<string, unknown> = {};
-  if (body?.name) updates.name = body.name;
-  if (body?.designation !== undefined) updates.designation = body.designation;
-  if (body?.photo_url !== undefined) updates.photo_url = body.photo_url;
-  if (body?.shift_id !== undefined) updates.shift_id = body.shift_id || null;
-  if (body?.pin) {
-    if (!/^\d{4}$/.test(body.pin)) {
-      return NextResponse.json({ error: 'PIN must be exactly 4 digits' }, { status: 400 });
-    }
-    updates.pin_hash = await bcrypt.hash(body.pin, 12);
-  }
+  if (body.name !== undefined) updates.name = body.name;
+  if (body.start_time !== undefined) updates.start_time = body.start_time;
+  if (body.end_time !== undefined) updates.end_time = body.end_time;
+  if (body.late_threshold_minutes !== undefined)
+    updates.late_threshold_minutes = Number(body.late_threshold_minutes);
 
   const { data, error } = await supabase
-    .from('profiles')
+    .from('shifts')
     .update(updates)
     .eq('id', params.id)
     .select()
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ staff: data });
+  return NextResponse.json({ shift: data });
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
-  const user = await requireAdmin();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const supabase = createAdminClient();
-
-  // Delete auth user (cascades to profiles via FK)
-  const { error } = await supabase.auth.admin.deleteUser(params.id);
+  // Unassign shift from any staff first
+  await supabase.from('profiles').update({ shift_id: null }).eq('shift_id', params.id);
+  const { error } = await supabase.from('shifts').delete().eq('id', params.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
   return NextResponse.json({ success: true });
 }

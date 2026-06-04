@@ -9,11 +9,11 @@ export async function POST(request: NextRequest) {
   const ip = getClientIP(request);
   const supabase = createAdminClient();
 
-  // Fetch settings (includes allowed_ips)
+  // Fetch global settings (allowed_ips + default shift)
   const { data: settings } = await supabase
     .from('settings')
     .select('shift_start_time, late_threshold_minutes, allowed_ips')
-    .single();
+    .maybeSingle();
 
   const allowlist: string[] = settings?.allowed_ips
     ? settings.allowed_ips.split(',').map((s: string) => s.trim()).filter(Boolean)
@@ -31,16 +31,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid PIN' }, { status: 400 });
   }
 
-  // Fetch all staff profiles to bcrypt-compare PINs
+  // Fetch staff profiles including their assigned shift
   const { data: profiles, error: profileErr } = await supabase
     .from('profiles')
-    .select('id, name, designation, photo_url, pin_hash, role');
+    .select('id, name, designation, photo_url, pin_hash, role, shift_id');
 
   if (profileErr || !profiles) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 
-  let matched = null;
+  let matched: (typeof profiles)[0] | null = null;
   for (const profile of profiles) {
     if (await bcrypt.compare(body.pin, profile.pin_hash)) {
       matched = profile;
@@ -52,8 +52,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Incorrect PIN. Please try again.' }, { status: 401 });
   }
 
-  const shiftStart = settings?.shift_start_time ?? '09:00:00';
-  const lateThreshold = settings?.late_threshold_minutes ?? 15;
+  // Resolve shift: use staff's assigned shift or fall back to global settings
+  let shiftStart = settings?.shift_start_time ?? '09:00:00';
+  let lateThreshold = settings?.late_threshold_minutes ?? 15;
+
+  if (matched.shift_id) {
+    const { data: shift } = await supabase
+      .from('shifts')
+      .select('start_time, late_threshold_minutes')
+      .eq('id', matched.shift_id)
+      .single();
+    if (shift) {
+      shiftStart = shift.start_time;
+      lateThreshold = shift.late_threshold_minutes;
+    }
+  }
 
   const today = todayIST();
   const now = new Date();
@@ -63,7 +76,7 @@ export async function POST(request: NextRequest) {
     .select('id, check_in_time, check_out_time, status')
     .eq('staff_id', matched.id)
     .eq('date', today)
-    .single();
+    .maybeSingle();
 
   let action: 'check_in' | 'check_out';
   let status: string;

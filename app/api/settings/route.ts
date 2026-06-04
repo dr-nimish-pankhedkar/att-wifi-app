@@ -8,6 +8,7 @@ const DEFAULTS = {
   shift_start_time: '09:00:00',
   late_threshold_minutes: 15,
   allowed_ips: '',
+  logo_url: null,
 };
 
 export async function GET() {
@@ -42,6 +43,7 @@ export async function PUT(request: NextRequest) {
   if (body.late_threshold_minutes !== undefined)
     updates.late_threshold_minutes = Number(body.late_threshold_minutes);
   if (body.allowed_ips !== undefined) updates.allowed_ips = body.allowed_ips;
+  if (body.logo_url !== undefined) updates.logo_url = body.logo_url;
 
   let result;
   if (existing) {

@@ -13,28 +13,42 @@ interface StaffMember {
   photo_url: string | null;
   role: string;
   created_at: string;
+  shift_id: string | null;
+  shifts: { id: string; name: string; start_time: string } | null;
+}
+
+interface ShiftOption {
+  id: string;
+  name: string;
+  start_time: string;
 }
 
 export default function StaffPage() {
   const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [shifts, setShifts] = useState<ShiftOption[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const supabase = createClient();
 
-  const loadStaff = useCallback(() => {
+  const loadData = useCallback(() => {
     setLoading(true);
-    fetch('/api/staff')
-      .then((r) => r.json())
-      .then((d) => setStaff(d.staff ?? []))
+    Promise.all([
+      fetch('/api/staff').then((r) => r.json()),
+      fetch('/api/shifts').then((r) => r.json()),
+    ])
+      .then(([staffData, shiftsData]) => {
+        setStaff(staffData.staff ?? []);
+        setShifts(shiftsData.shifts ?? []);
+      })
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) router.replace('/admin/login');
-      else loadStaff();
+      else loadData();
     });
-  }, [router, supabase.auth, loadStaff]);
+  }, [router, supabase.auth, loadData]);
 
   return (
     <div className="flex min-h-screen">
@@ -44,7 +58,7 @@ export default function StaffPage() {
           <h2 className="text-2xl font-bold">Staff Management</h2>
           <p className="text-muted-foreground text-sm">Add, edit, or remove staff members</p>
         </div>
-        {loading ? <StaffTableSkeleton /> : <StaffTable staff={staff} onRefresh={loadStaff} />}
+        {loading ? <StaffTableSkeleton /> : <StaffTable staff={staff} shifts={shifts} onRefresh={loadData} />}
       </main>
     </div>
   );

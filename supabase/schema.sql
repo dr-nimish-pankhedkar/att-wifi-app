@@ -9,11 +9,23 @@ create table if not exists settings (
   shift_start_time time default '09:00:00',
   late_threshold_minutes int default 15,
   allowed_ips text default '',   -- comma-separated office public IPs
+  logo_url text,
   updated_at timestamptz default now()
 );
 
--- If you already ran the schema, add the column with:
+-- If you already ran the schema, add missing columns with:
 -- alter table settings add column if not exists allowed_ips text default '';
+-- alter table settings add column if not exists logo_url text;
+
+-- Shift templates
+create table if not exists shifts (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  start_time time not null,
+  end_time time,
+  late_threshold_minutes int default 15,
+  created_at timestamptz default now()
+);
 
 -- Profiles (extends Supabase auth.users)
 create table if not exists profiles (
@@ -22,9 +34,13 @@ create table if not exists profiles (
   designation text,
   pin_hash text not null,
   photo_url text,
+  shift_id uuid references shifts(id) on delete set null,
   role text check (role in ('admin', 'staff')) default 'staff',
   created_at timestamptz default now()
 );
+
+-- If you already ran the schema, add the column with:
+-- alter table profiles add column if not exists shift_id uuid references shifts(id) on delete set null;
 
 -- Attendance
 create table if not exists attendance (
@@ -45,6 +61,7 @@ create table if not exists attendance (
 -- ============================================================
 
 alter table settings enable row level security;
+alter table shifts enable row level security;
 alter table profiles enable row level security;
 alter table attendance enable row level security;
 
@@ -61,6 +78,10 @@ $$;
 create policy "admin_all_settings"   on settings for all    using (is_admin());
 create policy "staff_read_settings"  on settings for select using (auth.role() = 'authenticated');
 
+-- shifts policies (service role bypasses RLS so API routes work without auth)
+create policy "admin_all_shifts"     on shifts for all    using (is_admin());
+create policy "public_read_shifts"   on shifts for select using (true);
+
 -- profiles policies
 create policy "admin_all_profiles"   on profiles for all    using (is_admin());
 create policy "staff_read_own"       on profiles for select using (auth.uid() = id);
@@ -73,3 +94,4 @@ create policy "staff_read_own_att"   on attendance for select using (auth.uid() 
 -- Storage bucket (run separately or via Supabase dashboard)
 -- ============================================================
 -- insert into storage.buckets (id, name, public) values ('staff-photos', 'staff-photos', true);
+-- insert into storage.buckets (id, name, public) values ('logos', 'logos', true);

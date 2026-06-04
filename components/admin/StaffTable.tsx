@@ -15,7 +15,20 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { createClient } from '@/lib/supabase/client';
+
+interface ShiftOption {
+  id: string;
+  name: string;
+  start_time: string;
+}
 
 interface StaffMember {
   id: string;
@@ -24,14 +37,17 @@ interface StaffMember {
   photo_url: string | null;
   role: string;
   created_at: string;
+  shift_id: string | null;
+  shifts: ShiftOption | null;
 }
 
 interface StaffTableProps {
   staff: StaffMember[];
+  shifts: ShiftOption[];
   onRefresh: () => void;
 }
 
-const EMPTY_FORM = { name: '', designation: '', pin: '', photo_url: '' };
+const EMPTY_FORM = { name: '', designation: '', pin: '', photo_url: '', shift_id: '' };
 
 export function StaffTableSkeleton() {
   return (
@@ -43,7 +59,7 @@ export function StaffTableSkeleton() {
   );
 }
 
-export default function StaffTable({ staff, onRefresh }: StaffTableProps) {
+export default function StaffTable({ staff, shifts, onRefresh }: StaffTableProps) {
   const [editTarget, setEditTarget] = useState<StaffMember | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -78,6 +94,7 @@ export default function StaffTable({ staff, onRefresh }: StaffTableProps) {
             designation: form.designation || undefined,
             pin: form.pin || undefined,
             photo_url: form.photo_url || undefined,
+            shift_id: form.shift_id || null,
           }),
         });
         const data = await res.json();
@@ -87,7 +104,7 @@ export default function StaffTable({ staff, onRefresh }: StaffTableProps) {
         const res = await fetch('/api/staff', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(form),
+          body: JSON.stringify({ ...form, shift_id: form.shift_id || null }),
         });
         const data = await res.json();
         if (!res.ok) { toast.error(data.error); return; }
@@ -111,7 +128,13 @@ export default function StaffTable({ staff, onRefresh }: StaffTableProps) {
 
   function openEdit(member: StaffMember) {
     setEditTarget(member);
-    setForm({ name: member.name, designation: member.designation ?? '', pin: '', photo_url: member.photo_url ?? '' });
+    setForm({
+      name: member.name,
+      designation: member.designation ?? '',
+      pin: '',
+      photo_url: member.photo_url ?? '',
+      shift_id: member.shift_id ?? '',
+    });
     setShowAdd(true);
   }
 
@@ -130,7 +153,8 @@ export default function StaffTable({ staff, onRefresh }: StaffTableProps) {
               <th className="text-left px-4 py-3 font-medium">Photo</th>
               <th className="text-left px-4 py-3 font-medium">Name</th>
               <th className="text-left px-4 py-3 font-medium">Designation</th>
-              <th className="text-left px-4 py-3 font-medium">Joined</th>
+              <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">Shift</th>
+              <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Joined</th>
               <th className="text-right px-4 py-3 font-medium">Actions</th>
             </tr>
           </thead>
@@ -154,7 +178,16 @@ export default function StaffTable({ staff, onRefresh }: StaffTableProps) {
                 </td>
                 <td className="px-4 py-3 font-medium">{member.name}</td>
                 <td className="px-4 py-3 text-muted-foreground">{member.designation ?? '—'}</td>
-                <td className="px-4 py-3 text-muted-foreground">
+                <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
+                  {member.shifts ? (
+                    <span className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                      {member.shifts.name}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Default</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
                   {new Date(member.created_at).toLocaleDateString('en-IN')}
                 </td>
                 <td className="px-4 py-3">
@@ -204,6 +237,25 @@ export default function StaffTable({ staff, onRefresh }: StaffTableProps) {
                 maxLength={4}
                 inputMode="numeric"
               />
+            </div>
+            <div>
+              <Label>Shift Assignment</Label>
+              <Select
+                value={form.shift_id || 'default'}
+                onValueChange={(v) => setForm({ ...form, shift_id: v === 'default' ? '' : v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Use default shift" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default (use global settings)</SelectItem>
+                  {shifts.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name} · {s.start_time.slice(0, 5)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>Profile Photo</Label>
