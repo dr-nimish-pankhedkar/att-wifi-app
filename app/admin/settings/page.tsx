@@ -116,14 +116,14 @@ export default function SettingsPage() {
   function addIp() {
     const trimmed = newIp.trim();
     if (!trimmed) return;
-    // Basic IP format validation
-    const ipv4 = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
-    if (!ipv4.test(trimmed)) {
-      toast.error('Enter a valid IPv4 address (e.g. 103.45.67.89)');
+    // Accept exact IP, wildcard prefix (106.213.*), or CIDR (106.213.0.0/16)
+    const valid = /^[\d.*]+(?:\/\d{1,2})?$/.test(trimmed);
+    if (!valid) {
+      toast.error('Use an IP (103.45.67.89), prefix (106.213.*), or CIDR (106.213.0.0/16)');
       return;
     }
     if (ipList.includes(trimmed)) {
-      toast.error('This IP is already in the list');
+      toast.error('This entry is already in the list');
       return;
     }
     setIpList([...ipList, trimmed]);
@@ -226,8 +226,10 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Only devices connecting from these public IPs can check in.
-                  Click &quot;Detect My IP&quot; from the office network to find yours.
+                  Only devices on matching IPs can check in. All staff on the same WiFi share one public IP.
+                  Supports exact IPs (<code className="text-xs bg-muted px-1 rounded">106.213.45.67</code>),
+                  wildcards (<code className="text-xs bg-muted px-1 rounded">106.213.*</code>),
+                  or CIDR (<code className="text-xs bg-muted px-1 rounded">106.213.0.0/16</code>).
                 </p>
 
                 {/* Current IP list */}
@@ -257,7 +259,7 @@ export default function SettingsPage() {
                   <Input
                     value={newIp}
                     onChange={(e) => setNewIp(e.target.value)}
-                    placeholder="e.g. 103.45.67.89"
+                    placeholder="e.g. 106.213.* or 106.213.45.67"
                     className="font-mono"
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addIp(); } }}
                   />
@@ -270,7 +272,8 @@ export default function SettingsPage() {
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Click &quot;Detect My IP&quot; while on office WiFi — it will auto-fill your current public IP.
+                  Tip: Click &quot;Detect My IP&quot; on your office WiFi to see your current IP, then add it as
+                  a wildcard (e.g. <span className="font-mono">106.213.*</span>) so it works even if the last octet changes.
                 </p>
               </CardContent>
             </Card>
