@@ -61,12 +61,13 @@ export default function SettingsPage() {
     if (file.size > 5 * 1024 * 1024) { toast.error('Logo must be under 5 MB'); return; }
     setLogoUploading(true);
     try {
-      const ext = file.name.split('.').pop();
-      const path = `logo.${ext}`;
-      const { error } = await supabase.storage.from('logos').upload(path, file, { upsert: true });
-      if (error) { toast.error('Logo upload failed'); return; }
-      const { data } = supabase.storage.from('logos').getPublicUrl(path);
-      const logoUrl = data.publicUrl + `?t=${Date.now()}`;
+      const form = new FormData();
+      form.append('file', file);
+      const uploadRes = await fetch('/api/upload/logo', { method: 'POST', body: form });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) { toast.error(uploadData.error ?? 'Upload failed'); return; }
+
+      const logoUrl = uploadData.url + `?t=${Date.now()}`;
       const res = await fetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
