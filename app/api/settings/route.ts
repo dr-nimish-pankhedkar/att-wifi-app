@@ -3,10 +3,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 
+const DEFAULTS = {
+  company_name: 'My Company',
+  shift_start_time: '09:00:00',
+  late_threshold_minutes: 15,
+  allowed_ips: '',
+};
+
 export async function GET() {
   const supabase = createAdminClient();
-  const { data, error } = await supabase.from('settings').select('*').single();
+  let { data, error } = await supabase.from('settings').select('*').maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Auto-create the single settings row if it doesn't exist yet
+  if (!data) {
+    const insert = await supabase.from('settings').insert(DEFAULTS).select().single();
+    if (insert.error) return NextResponse.json({ error: insert.error.message }, { status: 500 });
+    data = insert.data;
+  }
+
   return NextResponse.json({ settings: data });
 }
 
@@ -19,7 +34,7 @@ export async function PUT(request: NextRequest) {
   if (!body) return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
 
   const supabase = createAdminClient();
-  const { data: existing } = await supabase.from('settings').select('id').single();
+  const { data: existing } = await supabase.from('settings').select('id').maybeSingle();
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (body.company_name !== undefined) updates.company_name = body.company_name;

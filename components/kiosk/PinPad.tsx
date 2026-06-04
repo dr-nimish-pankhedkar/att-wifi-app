@@ -23,8 +23,10 @@ export default function PinPad({ onSubmit, loading }: PinPadProps) {
         const next = pin + key;
         setPin(next);
         if (next.length === 4) {
-          onSubmit(next);
-          setPin('');
+          setTimeout(() => {
+            onSubmit(next);
+            setPin('');
+          }, 120); // brief pause so last dot fills before submit
         }
       }
     },
@@ -32,22 +34,24 @@ export default function PinPad({ onSubmit, loading }: PinPadProps) {
   );
 
   return (
-    <div className="flex flex-col items-center gap-8">
+    <div className="flex flex-col items-center gap-8 w-full max-w-xs">
       {/* PIN dots */}
-      <div className="flex gap-4">
+      <div className="flex gap-5">
         {Array.from({ length: 4 }).map((_, i) => (
           <div
             key={i}
             className={cn(
-              'h-5 w-5 rounded-full border-2 border-white/60 transition-all duration-150',
-              i < pin.length ? 'bg-white scale-110' : 'bg-transparent'
+              'h-4 w-4 rounded-full border-2 border-white/40 transition-all duration-150',
+              i < pin.length
+                ? 'bg-white border-white scale-125'
+                : 'bg-transparent'
             )}
           />
         ))}
       </div>
 
-      {/* Keypad grid */}
-      <div className="grid grid-cols-3 gap-3 w-64">
+      {/* Keypad grid — fills available width up to max-w-xs */}
+      <div className="grid grid-cols-3 gap-3 w-full px-2">
         {KEYS.map((key, idx) => {
           if (key === '') return <div key={idx} />;
           return (
@@ -56,11 +60,12 @@ export default function PinPad({ onSubmit, loading }: PinPadProps) {
               onClick={() => handleKey(key)}
               disabled={loading}
               className={cn(
-                'flex items-center justify-center h-16 rounded-2xl text-2xl font-semibold',
+                'flex items-center justify-center rounded-2xl text-2xl font-semibold select-none',
                 'bg-white/10 border border-white/20 text-white',
-                'hover:bg-white/20 active:scale-95 transition-all duration-100',
+                'active:scale-95 active:bg-white/25 transition-all duration-100',
                 'disabled:opacity-40 disabled:cursor-not-allowed',
-                key === 'del' && 'text-base'
+                'h-16 sm:h-20', // taller on larger screens
+                key === 'del' && 'text-lg'
               )}
             >
               {key === 'del' ? <Delete className="w-6 h-6" /> : key}
@@ -70,9 +75,9 @@ export default function PinPad({ onSubmit, loading }: PinPadProps) {
       </div>
 
       {loading && (
-        <div className="flex items-center gap-2 text-white/70">
-          <div className="h-4 w-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-          <span className="text-sm">Verifying...</span>
+        <div className="flex items-center gap-2 text-white/60">
+          <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          <span className="text-sm">Verifying…</span>
         </div>
       )}
     </div>

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import PinPad from '@/components/kiosk/PinPad';
 import SuccessModal from '@/components/kiosk/SuccessModal';
+import { formatTimeIST, formatDateIST } from '@/lib/time';
 
 interface CheckinResult {
   name: string;
@@ -23,6 +24,22 @@ interface CheckinResult {
 export default function KioskPage() {
   const [loading, setLoading] = useState(false);
   const [successData, setSuccessData] = useState<CheckinResult | null>(null);
+  const [companyName, setCompanyName] = useState('Attendance');
+  const [now, setNow] = useState(new Date());
+
+  // Live clock
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Fetch company name
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((d) => { if (d.settings?.company_name) setCompanyName(d.settings.company_name); })
+      .catch(() => {});
+  }, []);
 
   const handlePinSubmit = useCallback(async (pin: string) => {
     setLoading(true);
@@ -46,14 +63,27 @@ export default function KioskPage() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex flex-col items-center justify-center px-4">
-      {/* Header */}
-      <div className="text-center mb-10">
-        <h1 className="text-4xl font-bold text-white tracking-tight">Attendance</h1>
-        <p className="text-white/60 mt-2 text-lg">Enter your PIN to check in / check out</p>
+    <main className="min-h-screen bg-gradient-to-b from-slate-900 via-blue-950 to-slate-900 flex flex-col items-center justify-between px-4 py-8 safe-area-inset">
+
+      {/* Top: company + clock */}
+      <div className="text-center w-full pt-4">
+        <h1 className="text-2xl font-bold text-white tracking-tight">{companyName}</h1>
+        <p className="text-4xl font-mono font-semibold text-white mt-1">
+          {formatTimeIST(now)}
+        </p>
+        <p className="text-white/50 text-sm mt-1">{formatDateIST(now)}</p>
       </div>
 
-      <PinPad onSubmit={handlePinSubmit} loading={loading} />
+      {/* Middle: PIN pad */}
+      <div className="w-full flex flex-col items-center gap-6">
+        <p className="text-white/70 text-base">Enter your PIN</p>
+        <PinPad onSubmit={handlePinSubmit} loading={loading} />
+      </div>
+
+      {/* Bottom: subtle hint */}
+      <p className="text-white/30 text-xs text-center pb-2">
+        Must be connected to office WiFi
+      </p>
 
       {successData && (
         <SuccessModal data={successData} onClose={() => setSuccessData(null)} />

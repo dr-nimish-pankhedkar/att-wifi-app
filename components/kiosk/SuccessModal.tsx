@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { CheckCircle, Clock, LogIn, LogOut } from 'lucide-react';
-import { formatTimeIST, formatDateIST } from '@/lib/time';
+import { formatTimeIST } from '@/lib/time';
 import { cn } from '@/lib/utils';
 
 interface AttendanceRecord {
@@ -23,117 +23,114 @@ interface SuccessData {
   last7days: AttendanceRecord[];
 }
 
-interface SuccessModalProps {
-  data: SuccessData;
-  onClose: () => void;
-}
-
 const STATUS_STYLE: Record<string, string> = {
   present: 'bg-green-100 text-green-800',
   late: 'bg-yellow-100 text-yellow-800',
   absent: 'bg-red-100 text-red-800',
 };
 
-export default function SuccessModal({ data, onClose }: SuccessModalProps) {
+export default function SuccessModal({ data, onClose }: { data: SuccessData; onClose: () => void }) {
   const [countdown, setCountdown] = useState(5);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setCountdown((c) => {
-        if (c <= 1) {
-          clearInterval(interval);
-          onClose();
-          return 0;
-        }
+        if (c <= 1) { clearInterval(interval); onClose(); return 0; }
         return c - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
   }, [onClose]);
 
+  const isCheckIn = data.action === 'check_in';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full mx-4 text-center">
-        {/* Success icon */}
-        <div className="flex justify-center mb-4">
-          <CheckCircle className="w-14 h-14 text-green-500" />
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+      {/* Sheet slides up from bottom on mobile, centered on tablet */}
+      <div className="bg-white w-full sm:max-w-md sm:mx-4 sm:rounded-3xl rounded-t-3xl shadow-2xl px-6 pt-6 pb-8 text-center">
+
+        {/* Drag handle on mobile */}
+        <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5 sm:hidden" />
+
+        {/* Icon */}
+        <div className="flex justify-center mb-3">
+          <div className={cn(
+            'w-14 h-14 rounded-full flex items-center justify-center',
+            isCheckIn ? 'bg-green-100' : 'bg-blue-100'
+          )}>
+            {isCheckIn
+              ? <LogIn className="w-7 h-7 text-green-600" />
+              : <LogOut className="w-7 h-7 text-blue-600" />}
+          </div>
         </div>
 
+        {/* Action label */}
+        <p className={cn('text-sm font-semibold uppercase tracking-widest mb-3',
+          isCheckIn ? 'text-green-600' : 'text-blue-600')}>
+          {isCheckIn ? 'Checked In' : 'Checked Out'}
+        </p>
+
         {/* Photo + Name */}
-        <div className="flex flex-col items-center gap-3 mb-6">
+        <div className="flex items-center gap-4 bg-gray-50 rounded-2xl px-4 py-3 mb-4 text-left">
           {data.photo_url ? (
-            <Image
-              src={data.photo_url}
-              alt={data.name}
-              width={80}
-              height={80}
-              className="rounded-full object-cover border-4 border-primary/20"
-            />
+            <Image src={data.photo_url} alt={data.name} width={52} height={52}
+              className="rounded-full object-cover flex-shrink-0" />
           ) : (
-            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center text-3xl font-bold text-primary">
+            <div className="w-13 h-13 w-[52px] h-[52px] rounded-full bg-blue-100 flex items-center justify-center text-xl font-bold text-blue-600 flex-shrink-0">
               {data.name[0].toUpperCase()}
             </div>
           )}
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">{data.name}</h2>
-            {data.designation && (
-              <p className="text-sm text-gray-500">{data.designation}</p>
-            )}
+          <div className="min-w-0">
+            <p className="font-bold text-gray-900 text-lg leading-tight truncate">{data.name}</p>
+            {data.designation && <p className="text-sm text-gray-500 truncate">{data.designation}</p>}
           </div>
         </div>
 
-        {/* Action + Time */}
-        <div className="flex items-center justify-center gap-2 mb-2">
-          {data.action === 'check_in' ? (
-            <LogIn className="w-5 h-5 text-green-600" />
-          ) : (
-            <LogOut className="w-5 h-5 text-blue-600" />
+        {/* Time + Status row */}
+        <div className="flex items-center justify-center gap-4 mb-5">
+          <div className="flex items-center gap-1.5 text-gray-600">
+            <Clock className="w-4 h-4" />
+            <span className="font-mono font-semibold">{formatTimeIST(data.time)}</span>
+          </div>
+          {isCheckIn && (
+            <span className={cn(
+              'px-3 py-1 rounded-full text-xs font-semibold capitalize',
+              STATUS_STYLE[data.status] ?? 'bg-gray-100 text-gray-700'
+            )}>
+              {data.status}
+            </span>
           )}
-          <span className="font-semibold text-gray-700">
-            {data.action === 'check_in' ? 'Checked In' : 'Checked Out'}
-          </span>
-        </div>
-        <div className="flex items-center justify-center gap-1 text-gray-500 mb-4">
-          <Clock className="w-4 h-4" />
-          <span className="text-sm">{formatTimeIST(data.time)}</span>
         </div>
 
-        {/* Status badge */}
-        {data.action === 'check_in' && (
-          <span
-            className={cn(
-              'inline-block px-3 py-1 rounded-full text-xs font-semibold capitalize mb-6',
-              STATUS_STYLE[data.status] ?? 'bg-gray-100 text-gray-700'
-            )}
-          >
-            {data.status}
-          </span>
+        {/* Last 7 days strip */}
+        {data.last7days.length > 0 && (
+          <div className="mb-5">
+            <p className="text-xs text-gray-400 mb-2">Last 7 days</p>
+            <div className="flex justify-center gap-2">
+              {data.last7days.map((rec) => (
+                <div key={rec.date} className="flex flex-col items-center gap-1">
+                  <div className={cn(
+                    'w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold',
+                    STATUS_STYLE[rec.status] ?? 'bg-gray-100 text-gray-400'
+                  )}>
+                    {rec.status === 'present' ? 'P' : rec.status === 'late' ? 'L' : 'A'}
+                  </div>
+                  <span className="text-[10px] text-gray-400">
+                    {new Date(rec.date + 'T12:00:00').toLocaleDateString('en-IN', { weekday: 'short' }).slice(0, 2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
-        {/* Last 7-day mini strip */}
-        <div className="mt-2 mb-6">
-          <p className="text-xs text-gray-400 mb-2">Last 7 days</p>
-          <div className="flex justify-center gap-2">
-            {data.last7days.map((rec) => (
-              <div key={rec.date} className="flex flex-col items-center gap-1">
-                <div
-                  className={cn(
-                    'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold',
-                    STATUS_STYLE[rec.status] ?? 'bg-gray-100 text-gray-400'
-                  )}
-                  title={`${rec.date}: ${rec.status}`}
-                >
-                  {rec.status === 'present' ? 'P' : rec.status === 'late' ? 'L' : 'A'}
-                </div>
-                <span className="text-[10px] text-gray-400">
-                  {new Date(rec.date).toLocaleDateString('en-IN', { weekday: 'short' }).slice(0, 2)}
-                </span>
-              </div>
-            ))}
-          </div>
+        {/* Countdown progress bar */}
+        <div className="w-full bg-gray-100 rounded-full h-1 mb-2 overflow-hidden">
+          <div
+            className="h-1 bg-gray-400 rounded-full transition-all duration-1000"
+            style={{ width: `${(countdown / 5) * 100}%` }}
+          />
         </div>
-
-        {/* Countdown */}
         <p className="text-xs text-gray-400">Closing in {countdown}s</p>
       </div>
     </div>
