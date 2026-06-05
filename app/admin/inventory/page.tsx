@@ -595,6 +595,32 @@ export default function InventoryPage() {
 
       {loading ? (
         <div className="text-center py-16 text-muted-foreground">Loading…</div>
+      ) : buckets.length === 0 && items.length === 0 ? (
+        /* ── Setup required ── */
+        <div className="rounded-xl border-2 border-dashed border-amber-300 bg-amber-50 p-6 space-y-4">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">⚠️</span>
+            <div>
+              <h3 className="font-semibold text-amber-900">Database tables not set up yet</h3>
+              <p className="text-sm text-amber-800 mt-1">
+                Run the following SQL files in your <strong>Supabase SQL Editor</strong> in order, then refresh this page.
+              </p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div className="rounded-lg bg-white border border-amber-200 p-3">
+              <p className="text-xs font-semibold text-amber-700 mb-1">Step 1 — Create items table + seed data</p>
+              <code className="text-xs text-gray-700 font-mono">supabase/inventory-schema.sql</code>
+            </div>
+            <div className="rounded-lg bg-white border border-amber-200 p-3">
+              <p className="text-xs font-semibold text-amber-700 mb-1">Step 2 — Create buckets + link items</p>
+              <code className="text-xs text-gray-700 font-mono">supabase/inventory-buckets-schema.sql</code>
+            </div>
+          </div>
+          <button onClick={load} className="text-sm font-medium text-amber-800 underline">
+            Refresh after running migrations
+          </button>
+        </div>
       ) : (
         <>
           {/* Log tab: date + save controls */}
