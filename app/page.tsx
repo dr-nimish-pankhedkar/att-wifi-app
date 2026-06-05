@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import PinPad from '@/components/kiosk/PinPad';
 import SuccessModal from '@/components/kiosk/SuccessModal';
 import { formatTimeIST, formatDateIST } from '@/lib/time';
-import { Package } from 'lucide-react';
+import { Package, Salad } from 'lucide-react';
 
 interface CheckinResult {
   name: string;
@@ -90,14 +90,24 @@ export default function KioskPage() {
         <PinPad onSubmit={handlePinSubmit} loading={loading} />
       </div>
 
+      {/* Bottom: inventory buttons + hint */}
       <div className="flex flex-col items-center gap-3 pb-2 w-full">
-        <Link
-          href="/inventory"
-          className="flex items-center gap-2 bg-white/10 border border-white/20 text-white/80 hover:bg-white/20 hover:text-white rounded-2xl px-6 py-3 text-sm font-medium transition-all active:scale-95"
-        >
-          <Package className="w-4 h-4" />
-          Log Inventory
-        </Link>
+        <div className="flex gap-3 w-full max-w-xs">
+          <Link
+            href="/daily"
+            className="flex-1 flex items-center justify-center gap-2 bg-white/10 border border-white/20 text-white/80 hover:bg-white/20 hover:text-white rounded-2xl px-4 py-3 text-sm font-medium transition-all active:scale-95"
+          >
+            <Salad className="w-4 h-4" />
+            Daily Kitchen
+          </Link>
+          <Link
+            href="/inventory"
+            className="flex-1 flex items-center justify-center gap-2 bg-white/10 border border-white/20 text-white/80 hover:bg-white/20 hover:text-white rounded-2xl px-4 py-3 text-sm font-medium transition-all active:scale-95"
+          >
+            <Package className="w-4 h-4" />
+            Stock Check
+          </Link>
+        </div>
         <p className="text-white/30 text-xs text-center">
           Must be connected to office WiFi
         </p>
