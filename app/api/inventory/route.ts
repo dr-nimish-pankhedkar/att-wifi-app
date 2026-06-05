@@ -18,9 +18,8 @@ export async function GET() {
 
   const { data: items, error } = await supabase
     .from('inventory_items')
-    .select('*')
+    .select('*, inventory_buckets(id, name, sort_order)')
     .eq('active', true)
-    .order('category')
     .order('sort_order');
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -63,31 +62,28 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json().catch(() => null);
-  if (!body?.category || !body?.name) {
-    return NextResponse.json({ error: 'category and name are required' }, { status: 400 });
+  if (!body?.name) {
+    return NextResponse.json({ error: 'name is required' }, { status: 400 });
   }
 
   const supabase = createAdminClient();
 
-  // Get max sort_order in category
-  const { data: maxRow } = await supabase
-    .from('inventory_items')
-    .select('sort_order')
-    .eq('category', body.category)
-    .order('sort_order', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Get max sort_order within the bucket (or globally)
+  let maxQuery = supabase.from('inventory_items').select('sort_order').order('sort_order', { ascending: false }).limit(1);
+  if (body.bucket_id) maxQuery = maxQuery.eq('bucket_id', body.bucket_id);
+  const { data: maxRow } = await maxQuery.maybeSingle();
 
   const sort_order = ((maxRow?.sort_order ?? 0) as number) + 10;
 
   const { data, error } = await supabase
     .from('inventory_items')
     .insert({
-      category: body.category,
+      category: body.category ?? '',
       name: body.name,
       unit: body.unit ?? '',
       min_level: body.min_level ?? 0,
       sort_order,
+      bucket_id: body.bucket_id ?? null,
     })
     .select()
     .single();

@@ -9,7 +9,6 @@ async function requireAuth() {
   return user;
 }
 
-/** PUT — update an inventory item */
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   const user = await requireAuth();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -20,47 +19,35 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   const supabase = createAdminClient();
   const allowed: Record<string, unknown> = {};
   if (body.name !== undefined) allowed.name = body.name;
-  if (body.category !== undefined) allowed.category = body.category;
-  if (body.unit !== undefined) allowed.unit = body.unit;
-  if (body.min_level !== undefined) allowed.min_level = body.min_level;
   if (body.sort_order !== undefined) allowed.sort_order = body.sort_order;
-  if (body.active !== undefined) allowed.active = body.active;
-  if ('bucket_id' in body) allowed.bucket_id = body.bucket_id;
 
   const { data, error } = await supabase
-    .from('inventory_items')
+    .from('inventory_buckets')
     .update(allowed)
     .eq('id', params.id)
     .select()
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ item: data });
+  return NextResponse.json({ bucket: data });
 }
 
-/** DELETE — soft-delete (set active=false) or hard-delete */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   const user = await requireAuth();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
-  const hard = searchParams.get('hard') === '1';
+  const moveTo = searchParams.get('move_to'); // optional: move items to another bucket
 
   const supabase = createAdminClient();
 
-  if (hard) {
-    const { error } = await supabase.from('inventory_items').delete().eq('id', params.id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  } else {
-    const { error } = await supabase
-      .from('inventory_items')
-      .update({ active: false })
-      .eq('id', params.id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  // Reassign items before deleting
+  await supabase
+    .from('inventory_items')
+    .update({ bucket_id: moveTo ?? null })
+    .eq('bucket_id', params.id);
 
+  const { error } = await supabase.from('inventory_buckets').delete().eq('id', params.id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
 }
