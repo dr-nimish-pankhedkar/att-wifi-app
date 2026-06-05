@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import Image from 'next/image';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import PinPad from '@/components/kiosk/PinPad';
 import SuccessModal from '@/components/kiosk/SuccessModal';
 import { formatTimeIST, formatDateIST } from '@/lib/time';
+import { Package } from 'lucide-react';
 
 interface CheckinResult {
   name: string;
@@ -73,13 +74,13 @@ export default function KioskPage() {
       {/* Top: logo + company + clock */}
       <div className="text-center w-full pt-4 flex flex-col items-center gap-2">
         {logoUrl && (
-          <Image
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
             src={logoUrl}
             alt={companyName}
             width={72}
             height={72}
             className="object-contain rounded-xl"
-            priority
           />
         )}
         <h1 className="text-2xl font-bold text-white tracking-tight">{companyName}</h1>
@@ -95,10 +96,19 @@ export default function KioskPage() {
         <PinPad onSubmit={handlePinSubmit} loading={loading} />
       </div>
 
-      {/* Bottom: subtle hint */}
-      <p className="text-white/30 text-xs text-center pb-2">
-        Must be connected to office WiFi
-      </p>
+      {/* Bottom: inventory button + hint */}
+      <div className="flex flex-col items-center gap-3 pb-2 w-full">
+        <Link
+          href="/inventory"
+          className="flex items-center gap-2 bg-white/10 border border-white/20 text-white/80 hover:bg-white/20 hover:text-white rounded-2xl px-6 py-3 text-sm font-medium transition-all active:scale-95"
+        >
+          <Package className="w-4 h-4" />
+          Log Inventory
+        </Link>
+        <p className="text-white/30 text-xs text-center">
+          Must be connected to office WiFi
+        </p>
+      </div>
 
       {successData && (
         <SuccessModal data={successData} onClose={() => setSuccessData(null)} />
