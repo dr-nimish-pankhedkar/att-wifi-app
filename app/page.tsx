@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import PinPad from '@/components/kiosk/PinPad';
 import SuccessModal from '@/components/kiosk/SuccessModal';
 import { formatTimeIST, formatDateIST } from '@/lib/time';
+import { Package } from 'lucide-react';
 
 interface CheckinResult {
   name: string;
@@ -28,13 +30,11 @@ export default function KioskPage() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [now, setNow] = useState(new Date());
 
-  // Live clock
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // Fetch company name + logo
   useEffect(() => {
     fetch('/api/settings')
       .then((r) => r.json())
@@ -69,7 +69,6 @@ export default function KioskPage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-900 via-blue-950 to-slate-900 flex flex-col items-center justify-between px-4 py-8 safe-area-inset">
 
-      {/* Top: logo + company + clock */}
       <div className="text-center w-full pt-4 flex flex-col items-center gap-2">
         {logoUrl && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -86,16 +85,23 @@ export default function KioskPage() {
         <p className="text-white/50 text-sm">{formatDateIST(now)}</p>
       </div>
 
-      {/* Middle: PIN pad */}
       <div className="w-full flex flex-col items-center gap-6">
         <p className="text-white/70 text-base">Enter your PIN</p>
         <PinPad onSubmit={handlePinSubmit} loading={loading} />
       </div>
 
-      {/* Bottom: subtle hint */}
-      <p className="text-white/30 text-xs text-center pb-2">
-        Must be connected to office WiFi
-      </p>
+      <div className="flex flex-col items-center gap-3 pb-2 w-full">
+        <Link
+          href="/inventory"
+          className="flex items-center gap-2 bg-white/10 border border-white/20 text-white/80 hover:bg-white/20 hover:text-white rounded-2xl px-6 py-3 text-sm font-medium transition-all active:scale-95"
+        >
+          <Package className="w-4 h-4" />
+          Log Inventory
+        </Link>
+        <p className="text-white/30 text-xs text-center">
+          Must be connected to office WiFi
+        </p>
+      </div>
 
       {successData && (
         <SuccessModal data={successData} onClose={() => setSuccessData(null)} />
