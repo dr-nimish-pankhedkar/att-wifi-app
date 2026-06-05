@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, FileText, Settings, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Settings, LogOut, Menu, X, CalendarDays } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 const NAV = [
   { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
   { label: 'Staff', href: '/admin/staff', icon: Users },
+  { label: 'Schedule', href: '/admin/schedule', icon: CalendarDays },
   { label: 'Reports', href: '/admin/reports', icon: FileText },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
 ];
@@ -36,7 +37,7 @@ export default function AdminNav() {
           onClick={() => setOpen(false)}
           className={cn(
             'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-            pathname === href
+            pathname === href || (href !== '/admin/dashboard' && pathname.startsWith(href))
               ? 'bg-primary text-primary-foreground'
               : 'text-muted-foreground hover:bg-muted hover:text-foreground'
           )}

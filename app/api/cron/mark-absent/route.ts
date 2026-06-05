@@ -12,7 +12,21 @@ export async function POST(request: NextRequest) {
   const supabase = createAdminClient();
   const today = todayIST();
 
-  // Get all staff
+  // Skip on days off
+  const { data: settings } = await supabase
+    .from('settings')
+    .select('off_days')
+    .maybeSingle();
+
+  const dayOfWeek = new Date(today + 'T12:00:00').getDay();
+  const offDays: number[] = settings?.off_days
+    ? settings.off_days.split(',').map((d: string) => parseInt(d.trim(), 10)).filter((d: number) => !isNaN(d))
+    : [1];
+
+  if (offDays.includes(dayOfWeek)) {
+    return NextResponse.json({ skipped: 'Day off', day: dayOfWeek });
+  }
+
   const { data: staff } = await supabase
     .from('profiles')
     .select('id')
@@ -20,7 +34,6 @@ export async function POST(request: NextRequest) {
 
   if (!staff?.length) return NextResponse.json({ marked: 0 });
 
-  // Upsert absent for those who have no check-in today
   const { data: existing } = await supabase
     .from('attendance')
     .select('staff_id')
@@ -32,11 +45,7 @@ export async function POST(request: NextRequest) {
 
   if (absentStaff.length) {
     await supabase.from('attendance').upsert(
-      absentStaff.map((s) => ({
-        staff_id: s.id,
-        date: today,
-        status: 'absent',
-      }))
+      absentStaff.map((s) => ({ staff_id: s.id, date: today, status: 'absent' }))
     );
   }
 

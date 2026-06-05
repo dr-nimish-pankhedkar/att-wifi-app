@@ -2,7 +2,6 @@
 export const dynamic = 'force-dynamic';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import AdminNav from '@/components/admin/AdminNav';
@@ -14,6 +13,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Save, Plus, Trash2, Wifi, Loader2, Upload, ImageIcon } from 'lucide-react';
 
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
 interface Settings {
   id: string;
   company_name: string;
@@ -21,6 +26,8 @@ interface Settings {
   late_threshold_minutes: number;
   allowed_ips: string | null;
   logo_url: string | null;
+  off_days: string | null;
+  weekend_shift_id: string | null;
 }
 
 export default function SettingsPage() {
@@ -145,6 +152,8 @@ export default function SettingsPage() {
         body: JSON.stringify({
           ...settings,
           allowed_ips: ipList.join(','),
+          off_days: settings.off_days ?? '1',
+          weekend_shift_id: settings.weekend_shift_id ?? null,
         }),
       });
       const data = await res.json();
@@ -278,6 +287,58 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
 
+            {/* Work Week */}
+            <Card>
+              <CardHeader><CardTitle>Work Week</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label className="mb-2 block">Days Off (uncheck to mark as working days)</Label>
+                  <div className="flex flex-wrap gap-3">
+                    {DAY_NAMES.map((name, idx) => {
+                      const offList = (settings.off_days ?? '1').split(',').map((d) => parseInt(d.trim(), 10));
+                      const isOff = offList.includes(idx);
+                      return (
+                        <label key={idx} className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={isOff}
+                            onChange={(e) => {
+                              const current = (settings.off_days ?? '1').split(',').map((d) => parseInt(d.trim(), 10)).filter((d) => !isNaN(d));
+                              const next = e.target.checked
+                                ? [...new Set([...current, idx])]
+                                : current.filter((d) => d !== idx);
+                              setSettings({ ...settings, off_days: next.sort().join(',') });
+                            }}
+                            className="w-4 h-4 rounded"
+                          />
+                          <span className="text-sm">{name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">Staff cannot check in on days off, and absent is not marked on those days.</p>
+                </div>
+                <div>
+                  <Label>Weekend Shift (Sat &amp; Sun default shift for all staff)</Label>
+                  <Select
+                    value={settings.weekend_shift_id ?? 'none'}
+                    onValueChange={(v) => setSettings({ ...settings, weekend_shift_id: v === 'none' ? null : v })}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Same as weekday shift" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Same as weekday shift</SelectItem>
+                      {shifts.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name} · {s.start_time.slice(0, 5)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">Overrides individual shift assignments on Saturdays and Sundays.</p>
+                </div>
+              </CardContent>
+            </Card>
+
             <Button type="submit" disabled={saving}>
               <Save className="w-4 h-4 mr-2" />
               {saving ? 'Saving…' : 'Save Settings'}
@@ -297,13 +358,8 @@ export default function SettingsPage() {
               </p>
               {settings?.logo_url && (
                 <div className="flex items-center gap-4">
-                  <Image
-                    src={settings.logo_url}
-                    alt="Company logo"
-                    width={80}
-                    height={80}
-                    className="object-contain rounded-md border bg-white p-1"
-                  />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={settings.logo_url} alt="Company logo" className="w-20 h-20 object-contain rounded-md border bg-white p-1" />
                   <Button variant="outline" size="sm" onClick={removeLogo}>
                     Remove
                   </Button>
