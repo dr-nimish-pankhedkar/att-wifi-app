@@ -386,15 +386,21 @@ function BucketCard({
               /* ── Log mode row ── */
               if (tab === 'log') {
                 const val = quantities[item.id] ?? '';
-                const isPreFilled = !!item.latest && val === String(item.latest.quantity);
+                const isFromLog = !!item.latest && val === String(item.latest.quantity);
+                const isFromMin = !item.latest && item.min_level > 0 && val === String(item.min_level);
+                const inputCls = isFromLog ? 'bg-blue-50 border-blue-300 text-blue-800'
+                               : isFromMin  ? 'bg-amber-50 border-amber-300 text-amber-800'
+                               : '';
                 return (
                   <div key={item.id} className="flex items-center gap-3 px-4 py-2">
                     <div className="flex-1 min-w-0">
                       <span className="text-sm">{item.name}</span>
-                      {item.latest && (
+                      {item.latest ? (
                         <p className="text-xs text-muted-foreground mt-0.5">
                           Last: {item.latest.quantity} {item.unit} · {new Date(item.latest.log_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                         </p>
+                      ) : (
+                        <p className="text-xs text-amber-600 mt-0.5">min level — verify count</p>
                       )}
                     </div>
                     <span className="text-xs text-muted-foreground w-10 text-right shrink-0">{item.unit}</span>
@@ -406,9 +412,7 @@ function BucketCard({
                       value={val}
                       onChange={e => onQtyChange(item.id, e.target.value)}
                       placeholder="qty"
-                      className={`w-24 border rounded px-2 py-1 text-sm text-right transition-colors ${
-                        isPreFilled ? 'bg-blue-50 border-blue-300 text-blue-800' : ''
-                      }`}
+                      className={`w-24 border rounded px-2 py-1 text-sm text-right transition-colors ${inputCls}`}
                     />
                   </div>
                 );
@@ -518,8 +522,11 @@ export default function InventoryPage() {
       setQuantities((prev) => {
         const next = { ...prev };
         for (const item of list) {
-          if (item.latest && next[item.id] === undefined) {
+          if (next[item.id] !== undefined) continue;
+          if (item.latest) {
             next[item.id] = String(item.latest.quantity);
+          } else if (item.min_level > 0) {
+            next[item.id] = String(item.min_level);
           }
         }
         return next;
