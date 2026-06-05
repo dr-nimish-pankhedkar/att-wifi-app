@@ -235,7 +235,7 @@ export default function StaffInventoryPage() {
     const res = await fetch('/api/inventory/log', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ log_date: logDate, entries }),
+      body: JSON.stringify({ log_date: logDate, entries, staff_id: staff?.id }),
     });
     setSaving(false);
     if (!res.ok) { toast.error((await res.json()).error ?? 'Failed'); return; }

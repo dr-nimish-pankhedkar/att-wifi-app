@@ -3,16 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 
-async function requireAuth() {
+async function requireAdminAuth() {
   const auth = createClient();
   const { data: { user } } = await auth.auth.getUser();
   return user;
 }
 
+/** GET — public; staff need this to group items by bucket */
 export async function GET() {
-  const user = await requireAuth();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from('inventory_buckets')
@@ -24,8 +22,9 @@ export async function GET() {
   return NextResponse.json({ buckets: data ?? [] });
 }
 
+/** POST — admin only: create a new bucket */
 export async function POST(request: NextRequest) {
-  const user = await requireAuth();
+  const user = await requireAdminAuth();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json().catch(() => null);
@@ -35,7 +34,6 @@ export async function POST(request: NextRequest) {
 
   const supabase = createAdminClient();
 
-  // Get max sort_order
   const { data: maxRow } = await supabase
     .from('inventory_buckets')
     .select('sort_order')

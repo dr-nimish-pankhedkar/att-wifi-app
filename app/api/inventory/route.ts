@@ -3,17 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 
-async function requireAuth() {
+async function requireAdminAuth() {
   const auth = createClient();
   const { data: { user } } = await auth.auth.getUser();
   return user;
 }
 
-/** GET — all active items with their latest stock log */
+/** GET — public; staff need this without an auth session */
 export async function GET() {
-  const user = await requireAuth();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   const supabase = createAdminClient();
 
   const { data: items, error } = await supabase
@@ -24,12 +21,10 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Get latest log per item
   const itemIds = (items ?? []).map((i) => i.id);
-  let latestLogs: Record<string, { quantity: number; log_date: string; notes: string | null }> = {};
+  const latestLogs: Record<string, { quantity: number; log_date: string; notes: string | null }> = {};
 
   if (itemIds.length > 0) {
-    // Fetch recent logs sorted by log_date desc, then pick first per item_id
     const { data: logs } = await supabase
       .from('inventory_logs')
       .select('item_id, quantity, log_date, notes')
@@ -56,9 +51,9 @@ export async function GET() {
   return NextResponse.json({ items: result });
 }
 
-/** POST — create a new inventory item */
+/** POST — admin only: create a new inventory item */
 export async function POST(request: NextRequest) {
-  const user = await requireAuth();
+  const user = await requireAdminAuth();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json().catch(() => null);
@@ -68,7 +63,6 @@ export async function POST(request: NextRequest) {
 
   const supabase = createAdminClient();
 
-  // Get max sort_order within the bucket (or globally)
   let maxQuery = supabase.from('inventory_items').select('sort_order').order('sort_order', { ascending: false }).limit(1);
   if (body.bucket_id) maxQuery = maxQuery.eq('bucket_id', body.bucket_id);
   const { data: maxRow } = await maxQuery.maybeSingle();
