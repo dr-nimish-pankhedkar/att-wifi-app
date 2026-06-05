@@ -22,6 +22,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   if (body?.designation !== undefined) updates.designation = body.designation;
   if (body?.photo_url !== undefined) updates.photo_url = body.photo_url;
   if (body?.shift_id !== undefined) updates.shift_id = body.shift_id || null;
+  if (body?.date_of_joining !== undefined) updates.date_of_joining = body.date_of_joining || null;
+  if (body?.birthdate !== undefined) updates.birthdate = body.birthdate || null;
   if (body?.pin) {
     if (!/^\d{4}$/.test(body.pin)) {
       return NextResponse.json({ error: 'PIN must be exactly 4 digits' }, { status: 400 });
