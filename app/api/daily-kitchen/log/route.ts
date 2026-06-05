@@ -1,0 +1,75 @@
+export const dynamic = 'force-dynamic';
+import { NextRequest, NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
+
+/**
+ * POST — staff: save a shift log
+ * Body: { log_date, shift: 'in'|'closing', entries: [{item_id, quantity}], staff_id? }
+ */
+export async function POST(request: NextRequest) {
+  const body = await request.json().catch(() => null);
+  if (!body?.log_date || !body?.shift || !Array.isArray(body.entries)) {
+    return NextResponse.json({ error: 'log_date, shift, and entries[] required' }, { status: 400 });
+  }
+  if (!['in', 'closing'].includes(body.shift)) {
+    return NextResponse.json({ error: 'shift must be "in" or "closing"' }, { status: 400 });
+  }
+
+  const supabase = createAdminClient();
+
+  let loggedBy: string | null = body.staff_id ?? null;
+  if (!loggedBy) {
+    try {
+      const auth = createClient();
+      const { data: { user } } = await auth.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        loggedBy = profile?.id ?? null;
+      }
+    } catch { /* non-fatal */ }
+  }
+
+  const rows = (body.entries as Array<{ item_id: string; quantity: number }>)
+    .filter((e) => e.item_id && e.quantity !== undefined && e.quantity !== null)
+    .map((e) => ({
+      item_id: e.item_id,
+      quantity: Number(e.quantity),
+      log_date: body.log_date,
+      shift: body.shift,
+      logged_by: loggedBy,
+    }));
+
+  if (rows.length === 0) return NextResponse.json({ saved: 0 });
+
+  const { data, error } = await supabase
+    .from('daily_kitchen_logs')
+    .upsert(rows, { onConflict: 'item_id,log_date,shift' })
+    .select();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ saved: data?.length ?? 0 });
+}
+
+/**
+ * GET — admin: fetch logs for a date
+ * ?date=YYYY-MM-DD
+ */
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const date = searchParams.get('date');
+  if (!date) return NextResponse.json({ error: 'date required' }, { status: 400 });
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from('daily_kitchen_logs')
+    .select('item_id, shift, quantity, logged_by, profiles(name)')
+    .eq('log_date', date);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ logs: data ?? [] });
+}
