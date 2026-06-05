@@ -104,7 +104,20 @@ function BucketCard({
   const [addingItem, setAddingItem] = useState(false);
   const [newItem, setNewItem] = useState({ name: '', unit: '', min_level: '0' });
   const [movingItem, setMovingItem] = useState<string | null>(null);
+  const [editingUnit, setEditingUnit] = useState<string | null>(null);
+  const [unitDraft, setUnitDraft] = useState('');
   const [saving, setSaving] = useState(false);
+
+  async function saveUnit(itemId: string, unit: string) {
+    const res = await fetch(`/api/inventory/${itemId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unit: unit.trim() }),
+    });
+    setEditingUnit(null);
+    if (!res.ok) { toast.error('Failed to update unit'); return; }
+    onRefresh();
+  }
 
   const color = bucketColor(colorIdx);
 
@@ -318,7 +331,28 @@ function BucketCard({
                     ) : (
                       <>
                         <span className="flex-1 text-sm font-medium">{item.name}</span>
-                        <span className="text-xs text-muted-foreground">{item.unit}</span>
+                        {/* Inline unit editor */}
+                        {editingUnit === item.id ? (
+                          <input
+                            value={unitDraft}
+                            onChange={e => setUnitDraft(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') saveUnit(item.id, unitDraft);
+                              if (e.key === 'Escape') setEditingUnit(null);
+                            }}
+                            onBlur={() => saveUnit(item.id, unitDraft)}
+                            className="w-16 border rounded px-2 py-0.5 text-xs text-center"
+                            autoFocus
+                          />
+                        ) : (
+                          <button
+                            onClick={() => { setEditingUnit(item.id); setUnitDraft(item.unit); }}
+                            className="text-xs text-muted-foreground border-b border-dashed border-muted-foreground/40 hover:text-foreground hover:border-foreground transition-colors min-w-8 text-center"
+                            title="Click to edit unit"
+                          >
+                            {item.unit || <span className="italic opacity-50">unit</span>}
+                          </button>
+                        )}
                         {item.min_level > 0 && (
                           <span className="text-xs text-muted-foreground hidden sm:block">min {item.min_level}</span>
                         )}
@@ -352,9 +386,17 @@ function BucketCard({
               /* ── Log mode row ── */
               if (tab === 'log') {
                 const val = quantities[item.id] ?? '';
+                const isPreFilled = !!item.latest && val === String(item.latest.quantity);
                 return (
                   <div key={item.id} className="flex items-center gap-3 px-4 py-2">
-                    <span className="flex-1 text-sm">{item.name}</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm">{item.name}</span>
+                      {item.latest && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Last: {item.latest.quantity} {item.unit} · {new Date(item.latest.log_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        </p>
+                      )}
+                    </div>
                     <span className="text-xs text-muted-foreground w-10 text-right shrink-0">{item.unit}</span>
                     <input
                       type="number"
@@ -364,11 +406,10 @@ function BucketCard({
                       value={val}
                       onChange={e => onQtyChange(item.id, e.target.value)}
                       placeholder="qty"
-                      className="w-24 border rounded px-2 py-1 text-sm text-right"
+                      className={`w-24 border rounded px-2 py-1 text-sm text-right transition-colors ${
+                        isPreFilled ? 'bg-blue-50 border-blue-300 text-blue-800' : ''
+                      }`}
                     />
-                    {item.min_level > 0 && (
-                      <span className="text-xs text-muted-foreground w-16 hidden sm:block">min {item.min_level}</span>
-                    )}
                   </div>
                 );
               }
