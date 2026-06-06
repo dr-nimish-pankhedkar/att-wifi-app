@@ -1,0 +1,107 @@
+-- Add Marathi name columns and seed translations
+-- Run after inventory-schema.sql and daily-kitchen-schema.sql
+
+alter table inventory_items      add column if not exists name_mr text;
+alter table daily_kitchen_items  add column if not exists name_mr text;
+
+-- ── Inventory items (weekly stock check) ────────────────────────────────────
+
+update inventory_items set name_mr = 'चिंच चटणी'           where lower(trim(name)) = 'imli chutney';
+update inventory_items set name_mr = 'मेयो'                 where lower(trim(name)) = 'mayo';
+update inventory_items set name_mr = 'टोमॅटो केचप'          where lower(trim(name)) = 'tomato ketchup';
+update inventory_items set name_mr = 'चिपोटले'              where lower(trim(name)) = 'chipotle';
+update inventory_items set name_mr = 'तंदूरी सॉस'           where lower(trim(name)) = 'tandoori';
+update inventory_items set name_mr = 'पांढरी पास्ता सॉस'   where lower(trim(name)) = 'white pasta sauce';
+update inventory_items set name_mr = 'पास्ता सॉस (रेग्युलर)' where lower(trim(name)) = 'pizza pasta sauce reg';
+update inventory_items set name_mr = 'पास्ता सॉस (जैन)'    where lower(trim(name)) = 'pizza pasta sauce jain';
+update inventory_items set name_mr = 'चीज ड्रेसिंग'         where lower(trim(name)) = 'cheese dressing';
+update inventory_items set name_mr = 'चीज ब्लेंड'           where lower(trim(name)) = 'cheese blend';
+update inventory_items set name_mr = 'फ्रेश क्रीम'           where lower(trim(name)) = 'fresh cream';
+update inventory_items set name_mr = 'सूर्यफूल तेल'         where lower(trim(name)) = 'sunflower oil 1l';
+update inventory_items set name_mr = 'चीज गार्लिक मसाला'   where lower(trim(name)) = 'snapin cheese garlic masala';
+update inventory_items set name_mr = 'पेरी पेरी (मोठे)'     where lower(trim(name)) = 'peri peri big pack';
+update inventory_items set name_mr = 'पेरी पेरी पाउच'       where lower(trim(name)) = 'snapin peri peri pouches';
+update inventory_items set name_mr = 'मॅगी मसाला'           where lower(trim(name)) = 'maggi masala 60pc bag';
+update inventory_items set name_mr = 'चाट मसाला'            where lower(trim(name)) = 'chat masala';
+update inventory_items set name_mr = 'मीठ'                  where lower(trim(name)) = 'salt';
+update inventory_items set name_mr = 'कॉफी सॅशे'            where lower(trim(name)) = 'coffee sachets';
+update inventory_items set name_mr = 'साखर सॅशे'            where lower(trim(name)) = 'sugar sachets';
+update inventory_items set name_mr = 'केचप सॅशे'            where lower(trim(name)) = 'ketchup sachets';
+update inventory_items set name_mr = 'ओरेगॅनो सॅशे'        where lower(trim(name)) = 'oregano sachets';
+update inventory_items set name_mr = 'चिली फ्लेक्स सॅशे'   where lower(trim(name)) = 'chilli flakes sachets';
+update inventory_items set name_mr = 'साखर'                 where lower(trim(name)) = 'sugar';
+update inventory_items set name_mr = 'वेलची'                where lower(trim(name)) = 'elaichi';
+update inventory_items set name_mr = 'चहा मसाला'            where lower(trim(name)) = 'tea masala';
+update inventory_items set name_mr = 'टाटा अग्नी'           where lower(trim(name)) = 'tata agni 1.5kg';
+update inventory_items set name_mr = 'सोसायटी चहा'          where lower(trim(name)) = 'society tea 1kg';
+update inventory_items set name_mr = 'ब्रू कॉफी'            where lower(trim(name)) = 'bru 200g';
+update inventory_items set name_mr = 'कॉन्टिनेंटल कॉफी'     where lower(trim(name)) = 'continental 200g';
+update inventory_items set name_mr = 'कोको प्रिमिक्स'       where lower(trim(name)) = 'coco premix';
+update inventory_items set name_mr = 'कैरी पन्हा प्रिमिक्स' where lower(trim(name)) = 'kairi panna premix';
+update inventory_items set name_mr = 'सब्जा'                where lower(trim(name)) = 'sabja';
+update inventory_items set name_mr = 'चॉकलेट पावडर'        where lower(trim(name)) = 'chocolate powder';
+update inventory_items set name_mr = 'डार्क कंपाउंड'        where lower(trim(name)) = 'dark compound slab';
+update inventory_items set name_mr = 'कोको पावडर'           where lower(trim(name)) = 'cocoa powder';
+update inventory_items set name_mr = 'पिवळे शेव'            where lower(trim(name)) = 'yellow shev';
+update inventory_items set name_mr = 'नारंगी शेव'           where lower(trim(name)) = 'orange shev';
+update inventory_items set name_mr = 'चणा डाळ'             where lower(trim(name)) = 'chana dal';
+update inventory_items set name_mr = 'कुरकुरे'              where lower(trim(name)) = 'kurkure';
+update inventory_items set name_mr = 'लेज (क्रीम ओनियन)'   where lower(trim(name)) = 'lays - cream n onion';
+update inventory_items set name_mr = 'लेज (मॅजिक मसाला)'   where lower(trim(name)) = 'lays - magic masala';
+update inventory_items set name_mr = 'नाचोस'               where lower(trim(name)) = 'nachos';
+update inventory_items set name_mr = 'मॅगी'                where lower(trim(name)) = 'maggi';
+update inventory_items set name_mr = 'खिचिया पापड'         where lower(trim(name)) = 'khicha papad';
+update inventory_items set name_mr = 'खाखरा'               where lower(trim(name)) = 'khakra';
+update inventory_items set name_mr = 'कच्चे मखाणे'          where lower(trim(name)) = 'raw makhana';
+update inventory_items set name_mr = 'बटाटा चिप्स'         where lower(trim(name)) = 'potato chips';
+update inventory_items set name_mr = 'पास्ता'               where lower(trim(name)) = 'pasta';
+update inventory_items set name_mr = 'कच्चे शेंगदाणे'       where lower(trim(name)) = 'raw shengdana';
+update inventory_items set name_mr = 'स्ट्रॉ (लहान)'        where lower(trim(name)) = 'straw small';
+update inventory_items set name_mr = 'स्ट्रॉ (मोठे)'        where lower(trim(name)) = 'straw big';
+update inventory_items set name_mr = 'डबा व झाकण (लहान)'   where lower(trim(name)) = 'container & lids small';
+update inventory_items set name_mr = 'डबा व झाकण (मोठे)'   where lower(trim(name)) = 'container & lids big';
+update inventory_items set name_mr = 'पेय डबा'              where lower(trim(name)) = 'beverage container';
+update inventory_items set name_mr = 'स्टिरर'               where lower(trim(name)) = 'stirrer';
+update inventory_items set name_mr = 'शेव पाव बॉक्स'       where lower(trim(name)) = 'shev pav parcel box';
+update inventory_items set name_mr = 'कप (मोठे)'            where lower(trim(name)) = 'cups big';
+update inventory_items set name_mr = 'पिशवी (लहान)'         where lower(trim(name)) = 'bags small';
+update inventory_items set name_mr = 'पिशवी (मोठी)'         where lower(trim(name)) = 'bags big';
+update inventory_items set name_mr = 'पिझ्झा बॉक्स'         where lower(trim(name)) = 'pizza boxes';
+update inventory_items set name_mr = 'पनीर'                 where lower(trim(name)) = 'paneer';
+update inventory_items set name_mr = 'आलू टिक्की पॅटी'     where lower(trim(name)) = 'aloo tikki patty';
+update inventory_items set name_mr = 'व्हेज पॅटी'           where lower(trim(name)) = 'veggie patty';
+update inventory_items set name_mr = 'स्वीट कॉर्न'          where lower(trim(name)) = 'sweet corn 1kg';
+update inventory_items set name_mr = 'चीज ब्लेंड (तुकडे)'  where lower(trim(name)) = 'diced cheese blend 1kg';
+update inventory_items set name_mr = 'फ्राईज'               where lower(trim(name)) = 'fries 2.5kg';
+update inventory_items set name_mr = 'व्हॅनिला आइसक्रीम'   where lower(trim(name)) = 'vanilla icecream';
+update inventory_items set name_mr = 'चीज ब्लॉक'            where lower(trim(name)) = 'cheese block 1kg';
+update inventory_items set name_mr = 'बटर'                  where lower(trim(name)) = 'butter 500g';
+update inventory_items set name_mr = 'पाणी (500ml)'         where lower(trim(name)) = 'water 500ml';
+update inventory_items set name_mr = 'सोडा'                 where lower(trim(name)) = 'soda';
+update inventory_items set name_mr = 'पाणी (1L)'            where lower(trim(name)) = 'water 1l';
+
+-- ── Daily kitchen items ─────────────────────────────────────────────────────
+
+update daily_kitchen_items set name_mr = 'शेव पाव बन'           where lower(trim(name)) = 'shev pav bun';
+update daily_kitchen_items set name_mr = 'बर्गर बन'              where lower(trim(name)) = 'burger bun';
+update daily_kitchen_items set name_mr = 'बन मस्का'             where lower(trim(name)) = 'bun maska';
+update daily_kitchen_items set name_mr = 'पिझ्झा बेस'           where lower(trim(name)) = 'pizza base';
+update daily_kitchen_items set name_mr = 'सँडविच ब्रेड'         where lower(trim(name)) = 'sandwich bread';
+update daily_kitchen_items set name_mr = 'खिचिया पापड'          where lower(trim(name)) = 'khichiya papad';
+update daily_kitchen_items set name_mr = 'सुरती कोको'           where lower(trim(name)) = 'surti coco';
+update daily_kitchen_items set name_mr = 'कांदा'                where lower(trim(name)) = 'onion';
+update daily_kitchen_items set name_mr = 'टोमॅटो'               where lower(trim(name)) = 'tomato';
+update daily_kitchen_items set name_mr = 'काकडी'                where lower(trim(name)) = 'cucumber';
+update daily_kitchen_items set name_mr = 'लिंबू'                where lower(trim(name)) = 'lemon';
+update daily_kitchen_items set name_mr = 'सिमला मिरची'          where lower(trim(name)) = 'capsicum';
+update daily_kitchen_items set name_mr = 'लाल भोपळी मिरची'     where lower(trim(name)) = 'bell pepper - red';
+update daily_kitchen_items set name_mr = 'पिवळी भोपळी मिरची'   where lower(trim(name)) = 'bell pepper - yellow';
+update daily_kitchen_items set name_mr = 'कैरी'                 where lower(trim(name)) = 'kairi';
+update daily_kitchen_items set name_mr = 'भाजलेले मखाणे'        where lower(trim(name)) = 'roasted makhana';
+update daily_kitchen_items set name_mr = 'कच्चे मखाणे'          where lower(trim(name)) = 'raw makhana';
+update daily_kitchen_items set name_mr = 'दूध'                  where lower(trim(name)) = 'milk';
+update daily_kitchen_items set name_mr = 'कोथिंबीर'             where lower(trim(name)) = 'coriander';
+update daily_kitchen_items set name_mr = 'पनीर'                 where lower(trim(name)) = 'paneer';
+update daily_kitchen_items set name_mr = 'मॅगी'                 where lower(trim(name)) = 'maggi';
+update daily_kitchen_items set name_mr = 'फ्रेश क्रीम'           where lower(trim(name)) = 'fresh cream';
+update daily_kitchen_items set name_mr = 'बटाटा'                where lower(trim(name)) = 'potato';

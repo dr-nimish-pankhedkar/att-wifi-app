@@ -5,48 +5,38 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, ChevronDown, ChevronUp, CheckCircle2, Delete } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { UI, getLang, setLang, type Lang } from '@/lib/lang';
 
 /* ── Types ────────────────────────────────────────── */
 
-interface StaffProfile {
-  id: string;
-  name: string;
-}
+interface StaffProfile { id: string; name: string; }
 
 interface InventoryItem {
   id: string;
   bucket_id: string | null;
   name: string;
+  name_mr: string | null;
   unit: string;
   min_level: number;
   latest: { quantity: number; log_date: string } | null;
 }
 
-interface Bucket {
-  id: string;
-  name: string;
-  sort_order: number;
-}
+interface Bucket { id: string; name: string; sort_order: number; }
 
 /* ── PIN pad ──────────────────────────────────────── */
 
-function KioskPinPad({ onSubmit, loading }: { onSubmit: (pin: string) => void; loading: boolean }) {
+function KioskPinPad({ onSubmit, loading, label }: { onSubmit: (pin: string) => void; loading: boolean; label: string }) {
   const [pin, setPin] = useState('');
-  const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'];
+  const KEYS = ['1','2','3','4','5','6','7','8','9','','0','del'];
 
-  const handleKey = useCallback(
-    (key: string) => {
-      if (loading) return;
-      if (key === 'del') {
-        setPin(p => p.slice(0, -1));
-      } else if (pin.length < 4) {
-        const next = pin + key;
-        setPin(next);
-        if (next.length === 4) setTimeout(() => { onSubmit(next); setPin(''); }, 120);
-      }
-    },
-    [pin, loading, onSubmit]
-  );
+  const handleKey = useCallback((key: string) => {
+    if (loading) return;
+    if (key === 'del') { setPin(p => p.slice(0, -1)); return; }
+    if (pin.length >= 4) return;
+    const next = pin + key;
+    setPin(next);
+    if (next.length === 4) setTimeout(() => { onSubmit(next); setPin(''); }, 120);
+  }, [pin, loading, onSubmit]);
 
   return (
     <div className="flex flex-col items-center gap-8 w-full max-w-xs">
@@ -77,9 +67,26 @@ function KioskPinPad({ onSubmit, loading }: { onSubmit: (pin: string) => void; l
       {loading && (
         <div className="flex items-center gap-2 text-white/60">
           <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-          <span className="text-sm">Verifying…</span>
+          <span className="text-sm">{label}</span>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Language toggle ─────────────────────────────── */
+
+function LangToggle({ lang, onChange }: { lang: Lang; onChange: (l: Lang) => void }) {
+  return (
+    <div className="flex rounded-lg overflow-hidden border border-white/20 text-xs font-semibold">
+      <button onClick={() => onChange('en')}
+        className={cn('px-2.5 py-1 transition-colors', lang === 'en' ? 'bg-white text-slate-900' : 'text-white/50 hover:text-white')}>
+        EN
+      </button>
+      <button onClick={() => onChange('mr')}
+        className={cn('px-2.5 py-1 transition-colors', lang === 'mr' ? 'bg-white text-slate-900' : 'text-white/50 hover:text-white')}>
+        मराठी
+      </button>
     </div>
   );
 }
@@ -97,20 +104,16 @@ const BUCKET_COLORS = [
   'from-indigo-600 to-indigo-500',
 ];
 
-function BucketSection({
-  bucket,
-  colorIdx,
-  items,
-  quantities,
-  onChange,
-}: {
+function BucketSection({ bucket, colorIdx, items, quantities, onChange, lang }: {
   bucket: Bucket;
   colorIdx: number;
   items: InventoryItem[];
   quantities: Record<string, string>;
   onChange: (id: string, val: string) => void;
+  lang: Lang;
 }) {
   const [open, setOpen] = useState(true);
+  const t = UI[lang];
   const filled = items.filter(i => quantities[i.id] !== '' && quantities[i.id] !== undefined).length;
   const gradient = BUCKET_COLORS[colorIdx % BUCKET_COLORS.length];
 
@@ -124,9 +127,7 @@ function BucketSection({
           <span className="font-bold text-white text-sm">{bucket.name}</span>
           <span className="text-white/60 text-xs">{filled}/{items.length}</span>
         </div>
-        {open
-          ? <ChevronUp className="w-4 h-4 text-white/70" />
-          : <ChevronDown className="w-4 h-4 text-white/70" />}
+        {open ? <ChevronUp className="w-4 h-4 text-white/70" /> : <ChevronDown className="w-4 h-4 text-white/70" />}
       </button>
 
       {open && (
@@ -135,21 +136,28 @@ function BucketSection({
             const val = quantities[item.id] ?? '';
             const num = val === '' ? null : Number(val);
             const hasMin = item.min_level > 0;
-            const isCritical = hasMin && num !== null && num <= item.min_level;
-            const isLow = hasMin && num !== null && num > item.min_level && num <= item.min_level * 1.5;
-            const isFromLog = !!item.latest && val === String(item.latest.quantity);
-            const isFromMinLevel = !item.latest && item.min_level > 0 && val === String(item.min_level);
+            const isCritical   = hasMin && num !== null && num <= item.min_level;
+            const isLow        = hasMin && num !== null && num > item.min_level && num <= item.min_level * 1.5;
+            const isFromLog    = !!item.latest && val === String(item.latest.quantity);
+            const isFromMinLvl = !item.latest && item.min_level > 0 && val === String(item.min_level);
+            const displayName  = (lang === 'mr' && item.name_mr) ? item.name_mr : item.name;
+            const dateStr      = item.latest
+              ? new Date(item.latest.log_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+              : '';
 
             return (
-              <div key={item.id} className="flex items-center gap-3 px-4 py-2.5">
+              <div key={item.id} className="flex items-center gap-2 px-4 py-2.5">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white font-medium leading-tight">{item.name}</p>
+                  <p className="text-sm text-white font-medium leading-tight">{displayName}</p>
+                  {lang === 'mr' && item.name_mr && (
+                    <p className="text-xs text-white/30 leading-tight">{item.name}</p>
+                  )}
                   {item.latest ? (
                     <p className="text-xs text-white/40 mt-0.5">
-                      Last: {item.latest.quantity} {item.unit} · {new Date(item.latest.log_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      {t.last(item.latest.quantity, item.unit, dateStr)}
                     </p>
                   ) : (
-                    <p className="text-xs text-amber-400/70 mt-0.5">min level — verify count</p>
+                    <p className="text-xs text-amber-400/70 mt-0.5">{t.minLevel}</p>
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -158,29 +166,24 @@ function BucketSection({
                     className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 text-white text-lg font-bold flex items-center justify-center active:scale-90 active:bg-white/25 transition-all select-none"
                   >−</button>
                   <input
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    step="any"
-                    value={val}
-                    onChange={e => onChange(item.id, e.target.value)}
-                    placeholder="—"
+                    type="number" inputMode="decimal" min={0} step="any"
+                    value={val} onChange={e => onChange(item.id, e.target.value)} placeholder="—"
                     className={cn(
                       'w-16 text-center rounded-xl px-2 py-1.5 text-sm font-medium outline-none',
                       'bg-white/10 border text-white placeholder-white/30',
-                      isCritical    ? 'border-red-400 bg-red-500/20' :
-                      isLow         ? 'border-amber-400 bg-amber-500/20' :
-                      isFromLog     ? 'border-blue-400 bg-blue-500/20' :
-                      isFromMinLevel? 'border-amber-500/50 bg-amber-500/10' :
-                      val !== ''    ? 'border-green-400 bg-green-500/10' :
-                                      'border-white/20'
+                      isCritical  ? 'border-red-400 bg-red-500/20'       :
+                      isLow       ? 'border-amber-400 bg-amber-500/20'   :
+                      isFromLog   ? 'border-blue-400 bg-blue-500/20'     :
+                      isFromMinLvl? 'border-amber-500/50 bg-amber-500/10':
+                      val !== ''  ? 'border-green-400 bg-green-500/10'   :
+                                    'border-white/20'
                     )}
                   />
                   <button
                     onClick={() => onChange(item.id, String((val === '' ? 0 : Number(val)) + 1))}
                     className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 text-white text-lg font-bold flex items-center justify-center active:scale-90 active:bg-white/25 transition-all select-none"
                   >+</button>
-                  <span className="text-xs text-white/40 w-8">{item.unit}</span>
+                  <span className="text-xs text-white/40 w-7">{item.unit}</span>
                 </div>
               </div>
             );
@@ -199,16 +202,21 @@ export default function StaffInventoryPage() {
   const router = useRouter();
   const todayIST = new Date().toLocaleString('en-CA', { timeZone: 'Asia/Kolkata' }).split(',')[0];
 
-  const [staff, setStaff] = useState<StaffProfile | null>(null);
+  const [lang, setLangState] = useState<Lang>('en');
+  const [staff, setStaff]   = useState<StaffProfile | null>(null);
   const [verifying, setVerifying] = useState(false);
-
-  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [items, setItems]   = useState<InventoryItem[]>([]);
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [logDate, setLogDate] = useState(todayIST);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved]   = useState(false);
+
+  useEffect(() => { setLangState(getLang()); }, []);
+
+  const switchLang = (l: Lang) => { setLang(l); setLangState(l); };
+  const t = UI[lang];
 
   useEffect(() => {
     if (!staff) return;
@@ -221,11 +229,8 @@ export default function StaffInventoryPage() {
         setBuckets(bData ?? []);
         const pre: Record<string, string> = {};
         for (const item of iData ?? []) {
-          if (item.latest) {
-            pre[item.id] = String(item.latest.quantity);
-          } else if (item.min_level > 0) {
-            pre[item.id] = String(item.min_level);
-          }
+          if (item.latest) pre[item.id] = String(item.latest.quantity);
+          else if (item.min_level > 0) pre[item.id] = String(item.min_level);
         }
         setQuantities(pre);
       })
@@ -235,24 +240,22 @@ export default function StaffInventoryPage() {
   const handlePin = useCallback(async (pin: string) => {
     setVerifying(true);
     const res = await fetch('/api/staff/verify-pin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pin }),
     });
     setVerifying(false);
-    if (!res.ok) { toast.error((await res.json()).error ?? 'Invalid PIN'); return; }
+    if (!res.ok) { toast.error((await res.json()).error ?? t.invalidPin); return; }
     setStaff(await res.json());
-  }, []);
+  }, [t.invalidPin]);
 
   async function handleSubmit() {
     const entries = items
       .filter(i => quantities[i.id] !== '' && quantities[i.id] !== undefined)
       .map(i => ({ item_id: i.id, quantity: Number(quantities[i.id]) }));
-    if (entries.length === 0) { toast.error('Fill at least one quantity'); return; }
+    if (entries.length === 0) { toast.error(t.fillOne); return; }
     setSaving(true);
     const res = await fetch('/api/inventory/log', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ log_date: logDate, entries, staff_id: staff?.id }),
     });
     setSaving(false);
@@ -260,7 +263,6 @@ export default function StaffInventoryPage() {
     setSaved(true);
   }
 
-  // Group items by bucket
   const itemsByBucket: Record<string, InventoryItem[]> = {};
   for (const item of items) {
     const key = item.bucket_id ?? '__none__';
@@ -274,18 +276,19 @@ export default function StaffInventoryPage() {
   if (!staff) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-slate-900 via-blue-950 to-slate-900 flex flex-col items-center justify-between px-4 py-8">
-        <div className="w-full">
+        <div className="w-full flex items-center justify-between">
           <button onClick={() => router.push('/')} className="flex items-center gap-2 text-white/60 hover:text-white text-sm">
-            <ArrowLeft className="w-4 h-4" /> Back
+            <ArrowLeft className="w-4 h-4" /> {t.back}
           </button>
+          <LangToggle lang={lang} onChange={switchLang} />
         </div>
         <div className="flex flex-col items-center gap-8 w-full">
           <div className="text-center">
             <div className="text-4xl mb-3">📦</div>
-            <h1 className="text-2xl font-bold text-white">Stock Check</h1>
-            <p className="text-white/50 text-sm mt-1">Enter your PIN to continue</p>
+            <h1 className="text-2xl font-bold text-white">{t.stockCheck}</h1>
+            <p className="text-white/50 text-sm mt-1">{t.enterPin}</p>
           </div>
-          <KioskPinPad onSubmit={handlePin} loading={verifying} />
+          <KioskPinPad onSubmit={handlePin} loading={verifying} label={t.verifying} />
         </div>
         <div />
       </main>
@@ -298,15 +301,14 @@ export default function StaffInventoryPage() {
       <main className="min-h-screen bg-gradient-to-b from-slate-900 via-blue-950 to-slate-900 flex flex-col items-center justify-center gap-6 px-4">
         <CheckCircle2 className="w-20 h-20 text-green-400" />
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-white">Saved!</h2>
+          <h2 className="text-2xl font-bold text-white">{t.saved}</h2>
           <p className="text-white/50 mt-1">
-            {totalFilled} items · {new Date(logDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}
+            {totalFilled} {t.items} · {new Date(logDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}
           </p>
         </div>
         <button onClick={() => router.push('/')}
-          className="mt-4 bg-white/10 border border-white/20 text-white rounded-xl px-8 py-3 font-medium hover:bg-white/20"
-        >
-          Done
+          className="mt-4 bg-white/10 border border-white/20 text-white rounded-xl px-8 py-3 font-medium hover:bg-white/20">
+          {t.done}
         </button>
       </main>
     );
@@ -315,30 +317,28 @@ export default function StaffInventoryPage() {
   /* ── Stock check form ────────────────────────── */
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-900 via-blue-950 to-slate-900 pb-32">
-      {/* Sticky header */}
       <div className="sticky top-0 z-20 bg-slate-900/90 backdrop-blur border-b border-white/10 px-4 py-3 flex items-center justify-between">
         <button onClick={() => router.push('/')} className="flex items-center gap-2 text-white/60 hover:text-white text-sm">
-          <ArrowLeft className="w-4 h-4" /> Back
+          <ArrowLeft className="w-4 h-4" /> {t.back}
         </button>
         <div className="text-center">
-          <p className="text-white font-semibold text-sm">Stock Check</p>
-          <p className="text-white/40 text-xs">Hi, {staff.name}</p>
+          <p className="text-white font-semibold text-sm">{t.stockCheck}</p>
+          <p className="text-white/40 text-xs">{t.hi} {staff.name}</p>
         </div>
-        <div className="w-16" />
+        <LangToggle lang={lang} onChange={switchLang} />
       </div>
 
-      {/* Date picker */}
       <div className="px-4 pt-4 pb-2">
         <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-xl px-4 py-3">
           <div>
-            <p className="text-xs text-white/50 mb-0.5">Check date</p>
+            <p className="text-xs text-white/50 mb-0.5">{t.checkDate}</p>
             <input type="date" value={logDate} max={todayIST}
               onChange={e => setLogDate(e.target.value)}
               className="bg-transparent text-white text-sm font-medium outline-none"
             />
           </div>
           <div className="text-right">
-            <p className="text-xs text-white/50">Filled</p>
+            <p className="text-xs text-white/50">{t.filled}</p>
             <p className="text-white font-bold text-lg">
               {totalFilled}<span className="text-white/40 font-normal text-xs"> / {items.length}</span>
             </p>
@@ -346,7 +346,6 @@ export default function StaffInventoryPage() {
         </div>
       </div>
 
-      {/* Bucket sections */}
       {loadingItems ? (
         <div className="flex justify-center pt-20">
           <div className="h-8 w-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
@@ -357,42 +356,33 @@ export default function StaffInventoryPage() {
             const bItems = itemsByBucket[bucket.id] ?? [];
             if (bItems.length === 0) return null;
             return (
-              <BucketSection
-                key={bucket.id}
-                bucket={bucket}
-                colorIdx={idx}
-                items={bItems}
-                quantities={quantities}
+              <BucketSection key={bucket.id} bucket={bucket} colorIdx={idx}
+                items={bItems} quantities={quantities} lang={lang}
                 onChange={(id, val) => setQuantities(p => ({ ...p, [id]: val }))}
               />
             );
           })}
-          {/* Unassigned items */}
           {(itemsByBucket['__none__'] ?? []).length > 0 && (
             <BucketSection
               bucket={{ id: '__none__', name: 'Other Items', sort_order: 9999 }}
-              colorIdx={buckets.length}
-              items={itemsByBucket['__none__']}
-              quantities={quantities}
+              colorIdx={buckets.length} items={itemsByBucket['__none__']}
+              quantities={quantities} lang={lang}
               onChange={(id, val) => setQuantities(p => ({ ...p, [id]: val }))}
             />
           )}
         </div>
       )}
 
-      {/* Sticky submit */}
       <div className="fixed bottom-0 left-0 right-0 px-4 pb-6 pt-4 bg-gradient-to-t from-slate-900 via-slate-900/95 to-transparent">
-        <button
-          onClick={handleSubmit}
-          disabled={saving || totalFilled === 0}
+        <button onClick={handleSubmit} disabled={saving || totalFilled === 0}
           className={cn(
             'w-full rounded-2xl py-4 font-bold text-base transition-all',
             totalFilled > 0 ? 'bg-blue-500 hover:bg-blue-400 text-white active:scale-[0.98]' : 'bg-white/10 text-white/30 cursor-not-allowed'
           )}
         >
           {saving
-            ? <span className="flex items-center justify-center gap-2"><div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving…</span>
-            : `Save Stock Check${totalFilled > 0 ? ` (${totalFilled})` : ''}`}
+            ? <span className="flex items-center justify-center gap-2"><div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t.saving}</span>
+            : totalFilled > 0 ? t.saveBtn(t.stockCheck, totalFilled) : t.saveBtnEmpty(t.stockCheck)}
         </button>
       </div>
     </main>
