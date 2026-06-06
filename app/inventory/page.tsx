@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, ChevronDown, ChevronUp, CheckCircle2, Delete } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { UI, getLang, setLang, type Lang } from '@/lib/lang';
+import { UI, getLang, setLang, itemName, type Lang } from '@/lib/lang';
 
 /* ── Types ────────────────────────────────────────── */
 
@@ -140,7 +140,7 @@ function BucketSection({ bucket, colorIdx, items, quantities, onChange, lang }: 
             const isLow        = hasMin && num !== null && num > item.min_level && num <= item.min_level * 1.5;
             const isFromLog    = !!item.latest && val === String(item.latest.quantity);
             const isFromMinLvl = !item.latest && item.min_level > 0 && val === String(item.min_level);
-            const displayName  = (lang === 'mr' && item.name_mr) ? item.name_mr : item.name;
+            const displayName  = itemName(item.name, item.name_mr, lang);
             const dateStr      = item.latest
               ? new Date(item.latest.log_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
               : '';
@@ -149,7 +149,7 @@ function BucketSection({ bucket, colorIdx, items, quantities, onChange, lang }: 
               <div key={item.id} className="flex items-center gap-2 px-4 py-2.5">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-white font-medium leading-tight">{displayName}</p>
-                  {lang === 'mr' && item.name_mr && (
+                  {lang === 'mr' && displayName !== item.name && (
                     <p className="text-xs text-white/30 leading-tight">{item.name}</p>
                   )}
                   {item.latest ? (

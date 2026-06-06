@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, CheckCircle2, Delete, Sun, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { UI, getLang, setLang, type Lang } from '@/lib/lang';
+import { UI, getLang, setLang, itemName, type Lang } from '@/lib/lang';
 
 interface StaffProfile { id: string; name: string; }
 interface KitchenItem  { id: string; name: string; name_mr: string | null; unit: string; }
@@ -264,9 +264,9 @@ export default function DailyKitchenPage() {
                 <div key={item.id} className="flex items-center gap-3 px-4 py-2.5 bg-white/5">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-white font-medium">
-                      {lang === 'mr' && item.name_mr ? item.name_mr : item.name}
+                      {itemName(item.name, item.name_mr, lang)}
                     </p>
-                    {lang === 'mr' && item.name_mr && (
+                    {lang === 'mr' && itemName(item.name, item.name_mr, lang) !== item.name && (
                       <p className="text-xs text-white/30 leading-tight">{item.name}</p>
                     )}
                   </div>
