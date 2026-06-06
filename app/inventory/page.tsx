@@ -152,7 +152,11 @@ function BucketSection({
                     <p className="text-xs text-amber-400/70 mt-0.5">min level — verify count</p>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => onChange(item.id, String(Math.max(0, (val === '' ? 0 : Number(val)) - 1)))}
+                    className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 text-white text-lg font-bold flex items-center justify-center active:scale-90 active:bg-white/25 transition-all select-none"
+                  >−</button>
                   <input
                     type="number"
                     inputMode="decimal"
@@ -162,7 +166,7 @@ function BucketSection({
                     onChange={e => onChange(item.id, e.target.value)}
                     placeholder="—"
                     className={cn(
-                      'w-20 text-right rounded-xl px-3 py-1.5 text-sm font-medium outline-none',
+                      'w-16 text-center rounded-xl px-2 py-1.5 text-sm font-medium outline-none',
                       'bg-white/10 border text-white placeholder-white/30',
                       isCritical    ? 'border-red-400 bg-red-500/20' :
                       isLow         ? 'border-amber-400 bg-amber-500/20' :
@@ -172,6 +176,10 @@ function BucketSection({
                                       'border-white/20'
                     )}
                   />
+                  <button
+                    onClick={() => onChange(item.id, String((val === '' ? 0 : Number(val)) + 1))}
+                    className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 text-white text-lg font-bold flex items-center justify-center active:scale-90 active:bg-white/25 transition-all select-none"
+                  >+</button>
                   <span className="text-xs text-white/40 w-8">{item.unit}</span>
                 </div>
               </div>

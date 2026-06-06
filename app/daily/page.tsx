@@ -240,7 +240,11 @@ export default function DailyKitchenPage() {
               return (
                 <div key={item.id} className="flex items-center gap-3 px-4 py-2.5 bg-white/5">
                   <p className="flex-1 text-sm text-white font-medium">{item.name}</p>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => setQuantities(p => ({ ...p, [item.id]: String(Math.max(0, (p[item.id] === '' || p[item.id] === undefined ? 0 : Number(p[item.id])) - 1)) }))}
+                      className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 text-white text-lg font-bold flex items-center justify-center active:scale-90 active:bg-white/25 transition-all select-none"
+                    >−</button>
                     <input
                       type="number"
                       inputMode="decimal"
@@ -250,7 +254,7 @@ export default function DailyKitchenPage() {
                       onChange={e => setQuantities(p => ({ ...p, [item.id]: e.target.value }))}
                       placeholder="—"
                       className={cn(
-                        'w-20 text-right rounded-xl px-3 py-1.5 text-sm font-medium outline-none',
+                        'w-16 text-center rounded-xl px-2 py-1.5 text-sm font-medium outline-none',
                         'bg-white/10 border text-white placeholder-white/30',
                         hasVal
                           ? shift === 'in'
@@ -259,6 +263,10 @@ export default function DailyKitchenPage() {
                           : 'border-white/20'
                       )}
                     />
+                    <button
+                      onClick={() => setQuantities(p => ({ ...p, [item.id]: String((p[item.id] === '' || p[item.id] === undefined ? 0 : Number(p[item.id])) + 1) }))}
+                      className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 text-white text-lg font-bold flex items-center justify-center active:scale-90 active:bg-white/25 transition-all select-none"
+                    >+</button>
                     {item.unit && <span className="text-xs text-white/40 w-8">{item.unit}</span>}
                   </div>
                 </div>
