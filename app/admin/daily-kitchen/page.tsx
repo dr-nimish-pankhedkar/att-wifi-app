@@ -79,18 +79,18 @@ function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () =
     <div className="rounded-xl border overflow-hidden">
       <div className="bg-muted/50 px-4 py-2.5 text-xs font-medium text-muted-foreground flex justify-between">
         <span>Item ({items.length})</span>
-        <span>Unit</span>
+        <span className="hidden sm:inline">Unit</span>
       </div>
       <div className="divide-y divide-border">
         {items.map(item => (
-          <div key={item.id} className="flex items-center gap-2 px-4 py-2">
+          <div key={item.id} className="px-4 py-2">
             {editingId === item.id ? (
-              <>
+              <div className="flex items-center gap-2">
                 <input
                   value={editForm.name}
                   onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
                   onKeyDown={e => e.key === 'Enter' && saveEdit(item.id)}
-                  className="flex-1 border rounded px-2 py-1 text-sm"
+                  className="flex-1 min-w-0 border rounded px-2 py-1.5 text-sm"
                   placeholder="Item name"
                   autoFocus
                 />
@@ -98,39 +98,42 @@ function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () =
                   value={editForm.unit}
                   onChange={e => setEditForm(p => ({ ...p, unit: e.target.value }))}
                   onKeyDown={e => e.key === 'Enter' && saveEdit(item.id)}
-                  className="w-20 border rounded px-2 py-1 text-sm text-center"
+                  className="w-16 sm:w-20 border rounded px-2 py-1.5 text-sm text-center"
                   placeholder="unit"
                 />
                 <button onClick={() => saveEdit(item.id)} disabled={saving}
-                  className="p-1.5 text-green-600 hover:bg-green-50 rounded">
+                  className="p-1.5 text-green-600 hover:bg-green-50 rounded shrink-0">
                   <Check className="w-4 h-4" />
                 </button>
                 <button onClick={() => setEditingId(null)}
-                  className="p-1.5 text-muted-foreground hover:bg-muted rounded">
+                  className="p-1.5 text-muted-foreground hover:bg-muted rounded shrink-0">
                   <X className="w-4 h-4" />
                 </button>
-              </>
+              </div>
             ) : (
-              <>
-                <span className="flex-1 text-sm font-medium">{item.name}</span>
-                <span className="text-xs text-muted-foreground w-20 text-center">{item.unit || '—'}</span>
-                <div className="flex items-center gap-0.5">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{item.name}</p>
+                  <p className="text-xs text-muted-foreground sm:hidden">{item.unit || '—'}</p>
+                </div>
+                <span className="hidden sm:block text-xs text-muted-foreground w-20 text-center shrink-0">{item.unit || '—'}</span>
+                <div className="flex items-center gap-0.5 shrink-0">
                   <button
                     onClick={() => { setEditingId(item.id); setEditForm({ name: item.name, unit: item.unit }); }}
-                    className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
+                    className="p-2 sm:p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
                     title="Edit"
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => deleteItem(item.id, item.name)}
-                    className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-50 rounded"
+                    className="p-2 sm:p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-50 rounded"
                     title="Remove"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
-              </>
+              </div>
             )}
           </div>
         ))}
@@ -144,7 +147,7 @@ function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () =
                 onChange={e => setNewItem(p => ({ ...p, name: e.target.value }))}
                 onKeyDown={e => e.key === 'Enter' && addItem()}
                 placeholder="Item name"
-                className="flex-1 border rounded px-2 py-1.5 text-sm"
+                className="flex-1 min-w-0 border rounded px-2 py-1.5 text-sm"
                 autoFocus
               />
               <input
@@ -152,14 +155,14 @@ function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () =
                 onChange={e => setNewItem(p => ({ ...p, unit: e.target.value }))}
                 onKeyDown={e => e.key === 'Enter' && addItem()}
                 placeholder="unit"
-                className="w-20 border rounded px-2 py-1.5 text-sm text-center"
+                className="w-16 sm:w-20 border rounded px-2 py-1.5 text-sm text-center"
               />
               <button onClick={addItem} disabled={saving}
-                className="bg-primary text-primary-foreground px-3 py-1.5 rounded text-sm font-medium disabled:opacity-50">
+                className="bg-primary text-primary-foreground px-3 py-1.5 rounded text-sm font-medium disabled:opacity-50 shrink-0">
                 {saving ? '…' : 'Add'}
               </button>
               <button onClick={() => { setAddingNew(false); setNewItem({ name: '', unit: '' }); }}
-                className="p-1.5 text-muted-foreground hover:bg-muted rounded">
+                className="p-1.5 text-muted-foreground hover:bg-muted rounded shrink-0">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -227,20 +230,20 @@ export default function DailyKitchenAdminPage() {
   return (
     <div className="flex min-h-screen">
       <AdminNav />
-      <main className="flex-1 p-4 md:p-6 overflow-auto">
+      <main className="flex-1 p-3 sm:p-4 md:p-6 overflow-auto">
 
         {/* Header */}
         <div className="mb-4">
-          <h2 className="text-2xl font-bold">Daily Kitchen</h2>
+          <h2 className="text-xl sm:text-2xl font-bold">Daily Kitchen</h2>
           <p className="text-muted-foreground text-sm">Morning IN &amp; Closing counts</p>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b gap-0.5 mb-5">
+        <div className="flex border-b gap-0.5 mb-5 overflow-x-auto">
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={cn(
-                'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors',
+                'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap',
                 tab === t.id
                   ? 'border-primary text-primary'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -255,14 +258,14 @@ export default function DailyKitchenAdminPage() {
         {tab === 'view' && (
           <>
             {/* Date nav */}
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex flex-wrap items-center gap-2 mb-4">
               <button onClick={() => setDate(d => shiftDate(d, -1))}
                 className="p-2 rounded-lg border hover:bg-muted transition-colors">
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <input type="date" value={date} max={todayIST()}
                 onChange={e => setDate(e.target.value)}
-                className="border rounded-lg px-3 py-1.5 text-sm font-medium bg-background"
+                className="border rounded-lg px-3 py-1.5 text-sm font-medium bg-background min-w-0"
               />
               <button onClick={() => setDate(d => shiftDate(d, 1))} disabled={date >= todayIST()}
                 className="p-2 rounded-lg border hover:bg-muted transition-colors disabled:opacity-40">
@@ -272,18 +275,18 @@ export default function DailyKitchenAdminPage() {
                 className="text-xs px-3 py-1.5 rounded-lg border hover:bg-muted transition-colors font-medium">
                 Today
               </button>
-              <span className="text-sm text-muted-foreground ml-1">{fmt(date)}</span>
+              <span className="text-sm text-muted-foreground basis-full sm:basis-auto sm:ml-1">{fmt(date)}</span>
             </div>
 
             {/* Summary chips */}
-            <div className="flex gap-3 mb-4">
-              <div className={cn('flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border',
+            <div className="flex flex-wrap gap-2 sm:gap-3 mb-4">
+              <div className={cn('flex items-center gap-2 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium border',
                 inCount > 0
                   ? 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-400'
                   : 'bg-muted text-muted-foreground border-transparent')}>
                 <Sun className="w-3.5 h-3.5" /> Morning IN · {inCount} items
               </div>
-              <div className={cn('flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border',
+              <div className={cn('flex items-center gap-2 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium border',
                 closingCount > 0
                   ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-500/10 dark:border-indigo-500/30 dark:text-indigo-400'
                   : 'bg-muted text-muted-foreground border-transparent')}>
@@ -296,45 +299,78 @@ export default function DailyKitchenAdminPage() {
                 <div className="h-8 w-8 border-2 border-muted border-t-foreground rounded-full animate-spin" />
               </div>
             ) : (
-              <div className="rounded-xl border overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-muted/50 text-muted-foreground">
-                      <th className="text-left px-4 py-2.5 font-medium w-8">#</th>
-                      <th className="text-left px-4 py-2.5 font-medium">Item</th>
-                      <th className="text-center px-3 py-2.5 font-medium w-16">Unit</th>
-                      <th className="text-center px-4 py-2.5 font-medium w-24">
-                        <span className="flex items-center justify-center gap-1"><Sun className="w-3.5 h-3.5 text-amber-500" /> IN</span>
-                      </th>
-                      <th className="text-center px-4 py-2.5 font-medium w-24">
-                        <span className="flex items-center justify-center gap-1"><Moon className="w-3.5 h-3.5 text-indigo-500" /> Closing</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {items.map((item, idx) => {
-                      const row = logMap[item.id] ?? {};
-                      return (
-                        <tr key={item.id} className="hover:bg-muted/30 transition-colors">
-                          <td className="px-4 py-2.5 text-muted-foreground text-xs">{idx + 1}</td>
-                          <td className="px-4 py-2.5 font-medium">{item.name}</td>
-                          <td className="px-3 py-2.5 text-center text-muted-foreground text-xs">{item.unit}</td>
-                          <td className="px-4 py-2.5 text-center">
+              <>
+                {/* Card list — mobile */}
+                <div className="md:hidden rounded-xl border divide-y divide-border overflow-hidden">
+                  {items.map((item, idx) => {
+                    const row = logMap[item.id] ?? {};
+                    return (
+                      <div key={item.id} className="flex items-center gap-3 px-4 py-2.5">
+                        <span className="text-xs text-muted-foreground w-5 shrink-0">{idx + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{item.name}</p>
+                          {item.unit && <p className="text-xs text-muted-foreground">{item.unit}</p>}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex flex-col items-center gap-0.5">
+                            <Sun className="w-3 h-3 text-amber-500" />
                             {row.in !== undefined
-                              ? <span className="inline-block px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 font-semibold text-sm min-w-[3rem]">{row.in}</span>
-                              : <span className="text-muted-foreground/40">—</span>}
-                          </td>
-                          <td className="px-4 py-2.5 text-center">
+                              ? <span className="inline-block px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 font-semibold text-sm min-w-[2.75rem] text-center">{row.in}</span>
+                              : <span className="text-muted-foreground/40 text-sm min-w-[2.75rem] text-center">—</span>}
+                          </div>
+                          <div className="flex flex-col items-center gap-0.5">
+                            <Moon className="w-3 h-3 text-indigo-500" />
                             {row.closing !== undefined
-                              ? <span className="inline-block px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 dark:bg-indigo-500/15 dark:text-indigo-300 font-semibold text-sm min-w-[3rem]">{row.closing}</span>
-                              : <span className="text-muted-foreground/40">—</span>}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                              ? <span className="inline-block px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 dark:bg-indigo-500/15 dark:text-indigo-300 font-semibold text-sm min-w-[2.75rem] text-center">{row.closing}</span>
+                              : <span className="text-muted-foreground/40 text-sm min-w-[2.75rem] text-center">—</span>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Table — md and up */}
+                <div className="hidden md:block rounded-xl border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-muted/50 text-muted-foreground">
+                        <th className="text-left px-4 py-2.5 font-medium w-8">#</th>
+                        <th className="text-left px-4 py-2.5 font-medium">Item</th>
+                        <th className="text-center px-3 py-2.5 font-medium w-16">Unit</th>
+                        <th className="text-center px-4 py-2.5 font-medium w-24">
+                          <span className="flex items-center justify-center gap-1"><Sun className="w-3.5 h-3.5 text-amber-500" /> IN</span>
+                        </th>
+                        <th className="text-center px-4 py-2.5 font-medium w-24">
+                          <span className="flex items-center justify-center gap-1"><Moon className="w-3.5 h-3.5 text-indigo-500" /> Closing</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {items.map((item, idx) => {
+                        const row = logMap[item.id] ?? {};
+                        return (
+                          <tr key={item.id} className="hover:bg-muted/30 transition-colors">
+                            <td className="px-4 py-2.5 text-muted-foreground text-xs">{idx + 1}</td>
+                            <td className="px-4 py-2.5 font-medium">{item.name}</td>
+                            <td className="px-3 py-2.5 text-center text-muted-foreground text-xs">{item.unit}</td>
+                            <td className="px-4 py-2.5 text-center">
+                              {row.in !== undefined
+                                ? <span className="inline-block px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 font-semibold text-sm min-w-[3rem]">{row.in}</span>
+                                : <span className="text-muted-foreground/40">—</span>}
+                            </td>
+                            <td className="px-4 py-2.5 text-center">
+                              {row.closing !== undefined
+                                ? <span className="inline-block px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 dark:bg-indigo-500/15 dark:text-indigo-300 font-semibold text-sm min-w-[3rem]">{row.closing}</span>
+                                : <span className="text-muted-foreground/40">—</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </>
         )}
