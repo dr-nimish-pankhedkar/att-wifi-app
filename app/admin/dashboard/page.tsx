@@ -33,7 +33,7 @@ export default function DashboardPage() {
   }, [router, supabase.auth]);
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex flex-col md:flex-row min-h-screen">
       <AdminNav />
       <main className="flex-1 p-6 overflow-auto">
         <div className="mb-6">
