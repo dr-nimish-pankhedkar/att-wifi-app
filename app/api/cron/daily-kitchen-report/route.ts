@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import nodemailer from 'nodemailer';
 
 function todayIST() {
   return new Date().toLocaleString('en-CA', { timeZone: 'Asia/Kolkata' }).split(',')[0];
@@ -8,51 +9,41 @@ function todayIST() {
 
 function fmtDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-IN', {
-    weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
 }
 
-async function sendWhatsApp(text: string): Promise<{ ok: boolean; error?: string }> {
-  const token    = process.env.WHATSAPP_API_TOKEN;
-  const phoneId  = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const to       = process.env.WHATSAPP_RECIPIENT_PHONE;
+async function sendEmail(subject: string, html: string, text: string): Promise<{ ok: boolean; error?: string }> {
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const to   = process.env.REPORT_EMAIL_TO;
 
-  if (!token || !phoneId || !to) {
-    return { ok: false, error: 'Missing WHATSAPP_API_TOKEN / WHATSAPP_PHONE_NUMBER_ID / WHATSAPP_RECIPIENT_PHONE env vars' };
+  if (!user || !pass || !to) {
+    return { ok: false, error: 'Missing SMTP_USER / SMTP_PASS / REPORT_EMAIL_TO env vars' };
   }
 
-  const res = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      to,
-      type: 'text',
-      text: { body: text, preview_url: false },
-    }),
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user, pass },
   });
 
-  if (!res.ok) {
-    const err = await res.text();
-    return { ok: false, error: err };
+  try {
+    await transporter.sendMail({ from: `"café tan 90°" <${user}>`, to, subject, html, text });
+    return { ok: true };
+  } catch (e: unknown) {
+    return { ok: false, error: String(e) };
   }
-  return { ok: true };
 }
 
 export async function GET(request: NextRequest) {
-  // Auth — Vercel sends the CRON_SECRET as a Bearer token
   const secret = request.headers.get('authorization')?.replace('Bearer ', '');
   if (secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const today = todayIST();
+  const today    = todayIST();
   const supabase = createAdminClient();
 
-  // Fetch items + today's logs in parallel
   const [itemsRes, logsRes] = await Promise.all([
     supabase.from('daily_kitchen_items').select('id, name, unit').eq('active', true).order('sort_order'),
     supabase.from('daily_kitchen_logs').select('item_id, shift, quantity').eq('log_date', today),
@@ -64,14 +55,12 @@ export async function GET(request: NextRequest) {
   const items = itemsRes.data ?? [];
   const logs  = logsRes.data  ?? [];
 
-  // Build map: item_id → { in, closing }
   const map: Record<string, { in?: number; closing?: number }> = {};
   for (const l of logs) {
     if (!map[l.item_id]) map[l.item_id] = {};
     map[l.item_id][l.shift as 'in' | 'closing'] = l.quantity;
   }
 
-  // Only include items that have at least one entry today
   const rows = items
     .map(item => ({
       name:       item.name,
@@ -88,52 +77,69 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ sent: false, reason: 'No kitchen logs for today' });
   }
 
-  // Format WhatsApp message
   const dateStr = fmtDate(today);
-  const lines: string[] = [];
 
-  lines.push(`*🥬 Daily Kitchen Report*`);
-  lines.push(`_${dateStr}_`);
-  lines.push('');
+  // ── HTML email ──────────────────────────────────────────────────────────────
+  const rowsHtml = rows.map(r => {
+    const consumed = r.consumed;
+    const badge =
+      consumed === undefined ? '<td style="color:#9ca3af">—</td>'
+      : consumed < 0  ? `<td style="color:#10b981;font-weight:600">+${Math.abs(consumed)} ${r.unit} <span style="font-size:11px;color:#9ca3af">(restocked)</span></td>`
+      : consumed === 0 ? `<td style="color:#9ca3af">0 ${r.unit}</td>`
+      : `<td style="color:#f59e0b;font-weight:600">${consumed} ${r.unit}</td>`;
 
-  const hasIn      = rows.some(r => r.inQty      !== undefined);
-  const hasClosing = rows.some(r => r.closingQty !== undefined);
+    return `
+      <tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:8px 12px;font-size:14px">${r.name}</td>
+        <td style="padding:8px 12px;text-align:center;font-size:14px;color:#374151">${r.inQty ?? '—'} ${r.inQty !== undefined ? r.unit : ''}</td>
+        <td style="padding:8px 12px;text-align:center;font-size:14px;color:#374151">${r.closingQty ?? '—'} ${r.closingQty !== undefined ? r.unit : ''}</td>
+        ${badge}
+      </tr>`;
+  }).join('');
 
-  if (hasIn) {
-    lines.push('*🌅 Morning IN*');
-    for (const r of rows) {
-      if (r.inQty !== undefined) {
-        lines.push(`  ${r.name}: *${r.inQty}* ${r.unit}`);
-      }
-    }
-    lines.push('');
-  }
+  const html = `
+    <!DOCTYPE html><html><body style="margin:0;padding:0;background:#f9fafb;font-family:sans-serif">
+    <div style="max-width:560px;margin:32px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+      <div style="background:#78350f;padding:20px 24px">
+        <p style="margin:0;color:#fde68a;font-size:12px;letter-spacing:1px;text-transform:uppercase">café tan 90°</p>
+        <h1 style="margin:4px 0 0;color:#fff;font-size:20px">🥬 Daily Kitchen Report</h1>
+        <p style="margin:4px 0 0;color:#fde68a;font-size:13px">${dateStr}</p>
+      </div>
+      <div style="padding:16px 0">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:#f9fafb">
+              <th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;font-weight:600">ITEM</th>
+              <th style="padding:8px 12px;text-align:center;font-size:12px;color:#6b7280;font-weight:600">🌅 IN</th>
+              <th style="padding:8px 12px;text-align:center;font-size:12px;color:#6b7280;font-weight:600">🌙 CLOSING</th>
+              <th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;font-weight:600">📊 CONSUMED</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+      <div style="padding:12px 24px;background:#f9fafb;border-top:1px solid #f3f4f6">
+        <p style="margin:0;font-size:11px;color:#9ca3af;text-align:center">Automated daily report · café tan 90°</p>
+      </div>
+    </div>
+    </body></html>`;
 
-  if (hasClosing) {
-    lines.push('*🌙 Closing*');
-    for (const r of rows) {
-      if (r.closingQty !== undefined) {
-        lines.push(`  ${r.name}: *${r.closingQty}* ${r.unit}`);
-      }
-    }
-    lines.push('');
-  }
+  // ── Plain text fallback ─────────────────────────────────────────────────────
+  const text = [
+    `Daily Kitchen Report — ${dateStr}`,
+    '',
+    'Item             | IN          | Closing     | Consumed',
+    '-'.repeat(60),
+    ...rows.map(r => {
+      const c = r.consumed;
+      const cStr = c === undefined ? '—' : c < 0 ? `+${Math.abs(c)} ${r.unit} (restocked)` : `${c} ${r.unit}`;
+      return `${r.name.padEnd(16)} | ${String(r.inQty ?? '—').padEnd(11)} | ${String(r.closingQty ?? '—').padEnd(11)} | ${cStr}`;
+    }),
+    '',
+    'café tan 90° · automated report',
+  ].join('\n');
 
-  const consumed = rows.filter(r => r.consumed !== undefined);
-  if (consumed.length > 0) {
-    lines.push('*📊 Consumed Today*');
-    for (const r of consumed) {
-      const val = r.consumed!;
-      const sign = val < 0 ? '🔼 restocked' : val === 0 ? '⚪ unchanged' : '';
-      lines.push(`  ${r.name}: *${Math.abs(val)}* ${r.unit}${sign ? ` (${sign})` : ''}`);
-    }
-    lines.push('');
-  }
-
-  lines.push(`_café tan 90° · automated report_`);
-
-  const message = lines.join('\n');
-  const result  = await sendWhatsApp(message);
+  const result = await sendEmail(`🥬 Kitchen Report — ${dateStr}`, html, text);
 
   if (!result.ok) {
     console.error('[daily-kitchen-report]', result.error);
