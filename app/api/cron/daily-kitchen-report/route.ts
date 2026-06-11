@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import nodemailer from 'nodemailer';
+import { sendEmail } from '@/lib/email';
 
 function todayIST() {
   return new Date().toLocaleString('en-CA', { timeZone: 'Asia/Kolkata' }).split(',')[0];
@@ -13,17 +13,6 @@ function fmtDate(d: string) {
   });
 }
 
-async function sendEmail(subject: string, html: string, text: string): Promise<{ ok: boolean; error?: string }> {
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  const to   = process.env.REPORT_EMAIL_TO;
-  if (!user || !pass || !to) return { ok: false, error: 'Missing SMTP_USER / SMTP_PASS / REPORT_EMAIL_TO' };
-  const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user, pass } });
-  try {
-    await transporter.sendMail({ from: `"café tan 90°" <${user}>`, to, subject, html, text });
-    return { ok: true };
-  } catch (e: unknown) { return { ok: false, error: String(e) }; }
-}
 
 export async function GET(request: NextRequest) {
   const secret = request.headers.get('authorization')?.replace('Bearer ', '');
