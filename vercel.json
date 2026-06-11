@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/mark-absent",
       "schedule": "30 13 * * *"
+    },
+    {
+      "path": "/api/cron/daily-kitchen-report",
+      "schedule": "0 16 * * *"
     }
   ]
 }
