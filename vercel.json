@@ -6,7 +6,11 @@
     },
     {
       "path": "/api/cron/daily-kitchen-report",
-      "schedule": "0 16 * * *"
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-stock-report",
+      "schedule": "0 18 * * 5"
     }
   ]
 }
