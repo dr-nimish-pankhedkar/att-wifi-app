@@ -46,12 +46,11 @@ export async function POST(request: NextRequest) {
 
   if (newRows.length === 0) return NextResponse.json({ saved: 0 });
 
-  // Fetch existing quantities so we can ADD rather than overwrite
+  // Fetch existing day totals (no shift filter — one row per item per day)
   const { data: existing } = await supabase
     .from('daily_kitchen_logs')
     .select('item_id, quantity')
     .eq('log_date', body.log_date)
-    .eq('shift', body.shift)
     .in('item_id', newRows.map((r) => r.item_id));
 
   const existingMap: Record<string, number> = {};
@@ -64,7 +63,7 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase
     .from('daily_kitchen_logs')
-    .upsert(rows, { onConflict: 'item_id,log_date,shift' })
+    .upsert(rows, { onConflict: 'item_id,log_date' })
     .select();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -87,19 +87,19 @@ export default function DailyKitchenPage() {
       .finally(() => setLoadingItems(false));
   }, [staff]);
 
-  // Load already-logged quantities for this shift+date so staff can see what's done
+  // Load already-logged day totals so staff can see what's done
   useEffect(() => {
     if (!staff) return;
     fetch(`/api/daily-kitchen/log?date=${logDate}`)
       .then(r => r.json())
       .then(d => {
         const map: Record<string, number> = {};
-        for (const l of (d.logs ?? []) as Array<{ item_id: string; shift: string; quantity: number }>) {
-          if (l.shift === shift) map[l.item_id] = l.quantity;
+        for (const l of (d.logs ?? []) as Array<{ item_id: string; quantity: number }>) {
+          map[l.item_id] = (map[l.item_id] ?? 0) + l.quantity;
         }
         setExistingLogs(map);
       });
-  }, [staff, shift, logDate]);
+  }, [staff, logDate]);
 
   const handlePin = useCallback(async (pin: string) => {
     setVerifying(true);
