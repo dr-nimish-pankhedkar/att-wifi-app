@@ -34,8 +34,8 @@ export async function POST(request: NextRequest) {
     } catch { /* non-fatal */ }
   }
 
-  const rows = (body.entries as Array<{ item_id: string; quantity: number }>)
-    .filter((e) => e.item_id && e.quantity !== undefined && e.quantity !== null)
+  const newRows = (body.entries as Array<{ item_id: string; quantity: number }>)
+    .filter((e) => e.item_id && e.quantity !== undefined && e.quantity !== null && Number(e.quantity) > 0)
     .map((e) => ({
       item_id: e.item_id,
       quantity: Number(e.quantity),
@@ -44,7 +44,23 @@ export async function POST(request: NextRequest) {
       logged_by: loggedBy,
     }));
 
-  if (rows.length === 0) return NextResponse.json({ saved: 0 });
+  if (newRows.length === 0) return NextResponse.json({ saved: 0 });
+
+  // Fetch existing quantities so we can ADD rather than overwrite
+  const { data: existing } = await supabase
+    .from('daily_kitchen_logs')
+    .select('item_id, quantity')
+    .eq('log_date', body.log_date)
+    .eq('shift', body.shift)
+    .in('item_id', newRows.map((r) => r.item_id));
+
+  const existingMap: Record<string, number> = {};
+  for (const e of existing ?? []) existingMap[e.item_id] = e.quantity;
+
+  const rows = newRows.map((r) => ({
+    ...r,
+    quantity: (existingMap[r.item_id] ?? 0) + r.quantity,
+  }));
 
   const { data, error } = await supabase
     .from('daily_kitchen_logs')
