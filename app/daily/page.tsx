@@ -87,19 +87,19 @@ export default function DailyKitchenPage() {
       .finally(() => setLoadingItems(false));
   }, [staff]);
 
-  // Load already-logged day totals so staff can see what's done
+  // Load already-logged quantities for this shift+date (IN only — Closing is always a fresh entry)
   useEffect(() => {
     if (!staff) return;
     fetch(`/api/daily-kitchen/log?date=${logDate}`)
       .then(r => r.json())
       .then(d => {
         const map: Record<string, number> = {};
-        for (const l of (d.logs ?? []) as Array<{ item_id: string; quantity: number }>) {
-          map[l.item_id] = (map[l.item_id] ?? 0) + l.quantity;
+        for (const l of (d.logs ?? []) as Array<{ item_id: string; shift: string; quantity: number }>) {
+          if (l.shift === shift) map[l.item_id] = l.quantity;
         }
         setExistingLogs(map);
       });
-  }, [staff, logDate]);
+  }, [staff, shift, logDate]);
 
   const handlePin = useCallback(async (pin: string) => {
     setVerifying(true);
@@ -258,22 +258,13 @@ export default function DailyKitchenPage() {
                   <div className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-white font-medium">{item.name}</p>
+                      {shift === 'in' && existing !== undefined && (
+                        <p className="text-xs mt-0.5 font-medium text-amber-400/80">
+                          ✓ logged today: {existing} {item.unit}
+                        </p>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {existing !== undefined && (
-                        <div className="text-right">
-                          <p className="text-xs text-white/40 leading-none mb-0.5">logged</p>
-                          <p className={cn(
-                            'text-sm font-bold leading-none',
-                            shift === 'in' ? 'text-amber-300' : 'text-indigo-300'
-                          )}>
-                            {existing}<span className="text-xs font-normal text-white/40 ml-0.5">{item.unit}</span>
-                          </p>
-                        </div>
-                      )}
-                      {existing !== undefined && (
-                        <span className="text-white/20 text-sm">+</span>
-                      )}
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <input
                         type="number"
                         inputMode="decimal"

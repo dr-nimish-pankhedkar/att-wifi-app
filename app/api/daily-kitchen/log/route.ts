@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/server';
 /**
  * POST — staff: save a shift log
  * Body: { log_date, shift: 'in'|'closing', entries: [{item_id, quantity}], staff_id? }
+ * IN shift is additive (quantities accumulate throughout the day).
+ * Closing shift is a snapshot overwrite (remaining stock at end of day).
  */
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -46,24 +48,30 @@ export async function POST(request: NextRequest) {
 
   if (newRows.length === 0) return NextResponse.json({ saved: 0 });
 
-  // Fetch existing day totals (no shift filter — one row per item per day)
-  const { data: existing } = await supabase
-    .from('daily_kitchen_logs')
-    .select('item_id, quantity')
-    .eq('log_date', body.log_date)
-    .in('item_id', newRows.map((r) => r.item_id));
+  let rows = newRows;
 
-  const existingMap: Record<string, number> = {};
-  for (const e of existing ?? []) existingMap[e.item_id] = e.quantity;
+  // Morning IN is additive — add to whatever was already logged this shift
+  if (body.shift === 'in') {
+    const { data: existing } = await supabase
+      .from('daily_kitchen_logs')
+      .select('item_id, quantity')
+      .eq('log_date', body.log_date)
+      .eq('shift', 'in')
+      .in('item_id', newRows.map((r) => r.item_id));
 
-  const rows = newRows.map((r) => ({
-    ...r,
-    quantity: (existingMap[r.item_id] ?? 0) + r.quantity,
-  }));
+    const existingMap: Record<string, number> = {};
+    for (const e of existing ?? []) existingMap[e.item_id] = e.quantity;
+
+    rows = newRows.map((r) => ({
+      ...r,
+      quantity: (existingMap[r.item_id] ?? 0) + r.quantity,
+    }));
+  }
+  // Closing is a snapshot — just overwrite with the value entered
 
   const { data, error } = await supabase
     .from('daily_kitchen_logs')
-    .upsert(rows, { onConflict: 'item_id,log_date' })
+    .upsert(rows, { onConflict: 'item_id,log_date,shift' })
     .select();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -71,7 +79,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET — admin: fetch logs for a date
+ * GET — fetch logs for a date
  * ?date=YYYY-MM-DD
  */
 export async function GET(request: NextRequest) {

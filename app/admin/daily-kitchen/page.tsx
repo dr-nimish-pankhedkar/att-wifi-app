@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 interface KitchenItem { id: string; name: string; unit: string; sort_order: number; }
-interface LogEntry    { item_id: string; quantity: number; }
+interface LogEntry    { item_id: string; shift: 'in' | 'closing'; quantity: number; }
 
 type Tab = 'view' | 'manage';
 
@@ -186,11 +186,12 @@ export default function DailyKitchenAdminPage() {
   const router   = useRouter();
   const supabase = createClient();
 
-  const [tab, setTab]         = useState<Tab>('view');
-  const [date, setDate]       = useState(todayIST());
-  const [items, setItems]     = useState<KitchenItem[]>([]);
-  const [logs, setLogs]       = useState<LogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tab, setTab]              = useState<Tab>('view');
+  const [date, setDate]            = useState(todayIST());
+  const [items, setItems]          = useState<KitchenItem[]>([]);
+  const [logs, setLogs]            = useState<LogEntry[]>([]);
+  const [prevLogs, setPrevLogs]    = useState<LogEntry[]>([]);
+  const [loading, setLoading]      = useState(true);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -200,23 +201,43 @@ export default function DailyKitchenAdminPage() {
 
   const load = useCallback(async (d: string) => {
     setLoading(true);
-    const [iRes, lRes] = await Promise.all([
+    const prev = shiftDate(d, -1);
+    const [iRes, lRes, pRes] = await Promise.all([
       fetch('/api/daily-kitchen/items'),
       fetch(`/api/daily-kitchen/log?date=${d}`),
+      fetch(`/api/daily-kitchen/log?date=${prev}`),
     ]);
     const { items: iData } = await iRes.json();
     const { logs: lData }  = await lRes.json();
+    const { logs: pData }  = await pRes.json();
     setItems(iData ?? []);
     setLogs(lData ?? []);
+    setPrevLogs(pData ?? []);
     setLoading(false);
   }, []);
 
   useEffect(() => { load(date); }, [date, load]);
 
-  const logMap: Record<string, number> = {};
-  for (const l of logs) logMap[l.item_id] = (logMap[l.item_id] ?? 0) + l.quantity;
+  const logMap: Record<string, { in?: number; closing?: number }> = {};
+  for (const l of logs) {
+    if (!logMap[l.item_id]) logMap[l.item_id] = {};
+    logMap[l.item_id][l.shift] = l.quantity;
+  }
+  const prevClosing: Record<string, number> = {};
+  for (const l of prevLogs) {
+    if (l.shift === 'closing') prevClosing[l.item_id] = l.quantity;
+  }
 
-  const loggedCount = Object.keys(logMap).length;
+  const getConsumption = (itemId: string) => {
+    const todayIn      = logMap[itemId]?.in;
+    const todayClose   = logMap[itemId]?.closing;
+    const yestClose    = prevClosing[itemId];
+    if (todayClose === undefined) return undefined;
+    return (yestClose ?? 0) + (todayIn ?? 0) - todayClose;
+  };
+
+  const inCount      = logs.filter(l => l.shift === 'in').length;
+  const closingCount = logs.filter(l => l.shift === 'closing').length;
 
   const TABS = [
     { id: 'view'   as Tab, label: 'Daily Log'   },
@@ -231,7 +252,7 @@ export default function DailyKitchenAdminPage() {
         {/* Header */}
         <div className="mb-4">
           <h2 className="text-xl sm:text-2xl font-bold">Daily Kitchen</h2>
-          <p className="text-muted-foreground text-sm">Daily usage totals</p>
+          <p className="text-muted-foreground text-sm">Morning IN · Closing · Consumption</p>
         </div>
 
         {/* Tabs */}
@@ -273,13 +294,19 @@ export default function DailyKitchenAdminPage() {
               <span className="text-sm text-muted-foreground basis-full sm:basis-auto sm:ml-1">{fmt(date)}</span>
             </div>
 
-            {/* Summary chip */}
+            {/* Summary chips */}
             <div className="flex flex-wrap gap-2 sm:gap-3 mb-4">
               <div className={cn('flex items-center gap-2 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium border',
-                loggedCount > 0
-                  ? 'bg-teal-50 border-teal-200 text-teal-700 dark:bg-teal-500/10 dark:border-teal-500/30 dark:text-teal-400'
+                inCount > 0
+                  ? 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/30 dark:text-amber-400'
                   : 'bg-muted text-muted-foreground border-transparent')}>
-                Logged · {loggedCount} / {items.length} items
+                🌅 Morning IN · {inCount} items
+              </div>
+              <div className={cn('flex items-center gap-2 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium border',
+                closingCount > 0
+                  ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-500/10 dark:border-indigo-500/30 dark:text-indigo-400'
+                  : 'bg-muted text-muted-foreground border-transparent')}>
+                🌙 Closing · {closingCount} items
               </div>
             </div>
 
@@ -289,29 +316,43 @@ export default function DailyKitchenAdminPage() {
               </div>
             ) : (
               <>
-                {/* Log table */}
-                <div className="rounded-xl border overflow-hidden">
-                  <table className="w-full text-sm">
+                <div className="rounded-xl border overflow-hidden overflow-x-auto">
+                  <table className="w-full text-sm min-w-[480px]">
                     <thead>
                       <tr className="bg-muted/50 text-muted-foreground">
                         <th className="text-left px-4 py-2.5 font-medium w-8">#</th>
                         <th className="text-left px-4 py-2.5 font-medium">Item</th>
-                        <th className="text-center px-3 py-2.5 font-medium w-16">Unit</th>
-                        <th className="text-center px-4 py-2.5 font-medium w-28">Daily Total</th>
+                        <th className="text-center px-3 py-2.5 font-medium w-12">Unit</th>
+                        <th className="text-center px-4 py-2.5 font-medium w-24">🌅 IN</th>
+                        <th className="text-center px-4 py-2.5 font-medium w-24">🌙 Closing</th>
+                        <th className="text-center px-4 py-2.5 font-medium w-28">📊 Consumed</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {items.map((item, idx) => {
-                        const qty = logMap[item.id];
+                        const row  = logMap[item.id] ?? {};
+                        const cons = getConsumption(item.id);
                         return (
                           <tr key={item.id} className="hover:bg-muted/30 transition-colors">
                             <td className="px-4 py-2.5 text-muted-foreground text-xs">{idx + 1}</td>
                             <td className="px-4 py-2.5 font-medium">{item.name}</td>
                             <td className="px-3 py-2.5 text-center text-muted-foreground text-xs">{item.unit}</td>
                             <td className="px-4 py-2.5 text-center">
-                              {qty !== undefined
-                                ? <span className="inline-block px-2 py-0.5 rounded-md bg-teal-100 text-teal-800 dark:bg-teal-500/15 dark:text-teal-300 font-semibold text-sm min-w-[3rem]">{qty}</span>
+                              {row.in !== undefined
+                                ? <span className="inline-block px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 font-semibold text-sm">{row.in}</span>
                                 : <span className="text-muted-foreground/40">—</span>}
+                            </td>
+                            <td className="px-4 py-2.5 text-center">
+                              {row.closing !== undefined
+                                ? <span className="inline-block px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 dark:bg-indigo-500/15 dark:text-indigo-300 font-semibold text-sm">{row.closing}</span>
+                                : <span className="text-muted-foreground/40">—</span>}
+                            </td>
+                            <td className="px-4 py-2.5 text-center">
+                              {cons === undefined
+                                ? <span className="text-muted-foreground/40">—</span>
+                                : cons <= 0
+                                  ? <span className="text-muted-foreground text-sm">{cons}</span>
+                                  : <span className="inline-block px-2 py-0.5 rounded-md bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300 font-semibold text-sm">{cons}</span>}
                             </td>
                           </tr>
                         );
