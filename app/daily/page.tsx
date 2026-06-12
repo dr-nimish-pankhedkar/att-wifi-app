@@ -258,16 +258,22 @@ export default function DailyKitchenPage() {
                   <div className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-white font-medium">{item.name}</p>
-                      {existing !== undefined && (
-                        <p className={cn(
-                          'text-xs mt-0.5 font-medium',
-                          shift === 'in' ? 'text-amber-400/80' : 'text-indigo-400/80'
-                        )}>
-                          ✓ already logged: {existing} {item.unit}
-                        </p>
-                      )}
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
+                      {existing !== undefined && (
+                        <div className="text-right">
+                          <p className="text-xs text-white/40 leading-none mb-0.5">logged</p>
+                          <p className={cn(
+                            'text-sm font-bold leading-none',
+                            shift === 'in' ? 'text-amber-300' : 'text-indigo-300'
+                          )}>
+                            {existing}<span className="text-xs font-normal text-white/40 ml-0.5">{item.unit}</span>
+                          </p>
+                        </div>
+                      )}
+                      {existing !== undefined && (
+                        <span className="text-white/20 text-sm">+</span>
+                      )}
                       <input
                         type="number"
                         inputMode="decimal"
@@ -275,7 +281,7 @@ export default function DailyKitchenPage() {
                         step="any"
                         value={val}
                         onChange={e => setQuantities(p => ({ ...p, [item.id]: e.target.value }))}
-                        placeholder={existing !== undefined ? '+add' : '—'}
+                        placeholder="—"
                         className={cn(
                           'w-20 text-right rounded-xl px-3 py-1.5 text-sm font-medium outline-none',
                           'bg-white/10 border text-white placeholder-white/30',
