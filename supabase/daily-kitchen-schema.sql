@@ -1,5 +1,5 @@
 -- Daily kitchen inventory tables
--- Kitchen items tracked twice daily (IN and Closing)
+-- One total quantity per item per day (shift label stored but not used for uniqueness)
 
 create table if not exists daily_kitchen_items (
   id          uuid primary key default gen_random_uuid(),
@@ -14,11 +14,11 @@ create table if not exists daily_kitchen_logs (
   id          uuid primary key default gen_random_uuid(),
   item_id     uuid not null references daily_kitchen_items(id) on delete cascade,
   log_date    date not null,
-  shift       text not null check (shift in ('in', 'closing')),
+  shift       text check (shift in ('in', 'closing')),
   quantity    numeric not null,
   logged_by   uuid references profiles(id),
   created_at  timestamptz not null default now(),
-  unique (item_id, log_date, shift)
+  unique (item_id, log_date)
 );
 
 -- RLS
