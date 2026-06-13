@@ -87,7 +87,7 @@ export default function DailyKitchenPage() {
       .finally(() => setLoadingItems(false));
   }, [staff]);
 
-  // Load already-logged quantities for this shift+date so staff can see what's done
+  // Load already-logged quantities for this shift+date (IN only — Closing is always a fresh entry)
   useEffect(() => {
     if (!staff) return;
     fetch(`/api/daily-kitchen/log?date=${logDate}`)
@@ -258,12 +258,9 @@ export default function DailyKitchenPage() {
                   <div className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-white font-medium">{item.name}</p>
-                      {existing !== undefined && (
-                        <p className={cn(
-                          'text-xs mt-0.5 font-medium',
-                          shift === 'in' ? 'text-amber-400/80' : 'text-indigo-400/80'
-                        )}>
-                          ✓ already logged: {existing} {item.unit}
+                      {shift === 'in' && existing !== undefined && (
+                        <p className="text-xs mt-0.5 font-medium text-amber-400/80">
+                          ✓ logged today: {existing} {item.unit}
                         </p>
                       )}
                     </div>
@@ -275,7 +272,7 @@ export default function DailyKitchenPage() {
                         step="any"
                         value={val}
                         onChange={e => setQuantities(p => ({ ...p, [item.id]: e.target.value }))}
-                        placeholder={existing !== undefined ? '+add' : '—'}
+                        placeholder="—"
                         className={cn(
                           'w-20 text-right rounded-xl px-3 py-1.5 text-sm font-medium outline-none',
                           'bg-white/10 border text-white placeholder-white/30',

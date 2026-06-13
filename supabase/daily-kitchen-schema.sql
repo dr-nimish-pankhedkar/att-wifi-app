@@ -1,5 +1,7 @@
 -- Daily kitchen inventory tables
--- Kitchen items tracked twice daily (IN and Closing)
+-- IN shift is additive (accumulates throughout morning).
+-- Closing shift is a snapshot (remaining stock at end of day).
+-- Consumption = yesterday closing + today IN − today closing.
 
 create table if not exists daily_kitchen_items (
   id          uuid primary key default gen_random_uuid(),
