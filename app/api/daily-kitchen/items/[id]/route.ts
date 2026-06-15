@@ -9,9 +9,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
   const supabase = createAdminClient();
   const update: Record<string, unknown> = {};
-  if (body.name  !== undefined) update.name       = body.name;
-  if (body.unit  !== undefined) update.unit       = body.unit;
-  if (body.active !== undefined) update.active    = body.active;
+  if (body.name     !== undefined) update.name      = body.name;
+  if (body.unit     !== undefined) update.unit      = body.unit;
+  if (body.category !== undefined) update.category  = body.category;
+  if (body.active   !== undefined) update.active    = body.active;
   if (body.sort_order !== undefined) update.sort_order = body.sort_order;
 
   const { data, error } = await supabase

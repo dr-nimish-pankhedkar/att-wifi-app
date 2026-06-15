@@ -7,7 +7,7 @@ import { ArrowLeft, CheckCircle2, Delete, Sun, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface StaffProfile { id: string; name: string; }
-interface KitchenItem  { id: string; name: string; unit: string; }
+interface KitchenItem  { id: string; name: string; unit: string; category: string; }
 
 /* ── PIN pad (same style as /inventory) ─────────── */
 function KioskPinPad({ onSubmit, loading }: { onSubmit: (pin: string) => void; loading: boolean }) {
@@ -131,6 +131,13 @@ export default function DailyKitchenPage() {
 
   const filled = items.filter(i => quantities[i.id] !== '' && quantities[i.id] !== undefined).length;
 
+  // Group items by category
+  const categories = Array.from(new Set(items.map(i => i.category || 'Miscellaneous')));
+  const itemsByCategory = categories.map(cat => ({
+    category: cat,
+    items: items.filter(i => (i.category || 'Miscellaneous') === cat),
+  }));
+
   /* ── PIN screen ──────────────────────────────── */
   if (!staff) {
     return (
@@ -247,49 +254,54 @@ export default function DailyKitchenPage() {
           <div className="h-8 w-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="px-4 pt-2">
-          <div className="rounded-2xl overflow-hidden border border-white/10 divide-y divide-white/10">
-            {items.map(item => {
-              const val      = quantities[item.id] ?? '';
-              const hasVal   = val !== '';
-              const existing = existingLogs[item.id];
-              return (
-                <div key={item.id} className="px-4 py-2.5 bg-white/5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white font-medium">{item.name}</p>
-                      {shift === 'in' && existing !== undefined && (
-                        <p className="text-xs mt-0.5 font-medium text-amber-400/80">
-                          ✓ logged today: {existing} {item.unit}
-                        </p>
-                      )}
+        <div className="px-4 pt-2 space-y-3">
+          {itemsByCategory.map(({ category, items: catItems }) => (
+            <div key={category}>
+              <p className="text-xs font-semibold text-white/40 uppercase tracking-wider px-1 mb-1">{category}</p>
+              <div className="rounded-2xl overflow-hidden border border-white/10 divide-y divide-white/10">
+                {catItems.map(item => {
+                  const val      = quantities[item.id] ?? '';
+                  const hasVal   = val !== '';
+                  const existing = existingLogs[item.id];
+                  return (
+                    <div key={item.id} className="px-4 py-2.5 bg-white/5">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white font-medium">{item.name}</p>
+                          {shift === 'in' && existing !== undefined && (
+                            <p className="text-xs mt-0.5 font-medium text-amber-400/80">
+                              ✓ logged today: {existing} {item.unit}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            step="any"
+                            value={val}
+                            onChange={e => setQuantities(p => ({ ...p, [item.id]: e.target.value }))}
+                            placeholder="—"
+                            className={cn(
+                              'w-20 text-right rounded-xl px-3 py-1.5 text-sm font-medium outline-none',
+                              'bg-white/10 border text-white placeholder-white/30',
+                              hasVal
+                                ? shift === 'in'
+                                  ? 'border-amber-400 bg-amber-500/20'
+                                  : 'border-indigo-400 bg-indigo-500/20'
+                                : 'border-white/20'
+                            )}
+                          />
+                          {item.unit && <span className="text-xs text-white/40 w-8">{item.unit}</span>}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        min={0}
-                        step="any"
-                        value={val}
-                        onChange={e => setQuantities(p => ({ ...p, [item.id]: e.target.value }))}
-                        placeholder="—"
-                        className={cn(
-                          'w-20 text-right rounded-xl px-3 py-1.5 text-sm font-medium outline-none',
-                          'bg-white/10 border text-white placeholder-white/30',
-                          hasVal
-                            ? shift === 'in'
-                              ? 'border-amber-400 bg-amber-500/20'
-                              : 'border-indigo-400 bg-indigo-500/20'
-                            : 'border-white/20'
-                        )}
-                      />
-                      {item.unit && <span className="text-xs text-white/40 w-8">{item.unit}</span>}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

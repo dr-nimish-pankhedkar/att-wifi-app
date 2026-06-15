@@ -7,8 +7,9 @@ export async function GET() {
   const supabase = createAdminClient();
   const { data: items, error } = await supabase
     .from('daily_kitchen_items')
-    .select('*')
+    .select('id, name, unit, category, sort_order')
     .eq('active', true)
+    .order('category')
     .order('sort_order');
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase
     .from('daily_kitchen_items')
-    .insert({ name: body.name.trim(), unit: body.unit ?? '', sort_order })
+    .insert({ name: body.name.trim(), unit: body.unit ?? '', category: body.category ?? 'Miscellaneous', sort_order })
     .select()
     .single();
 

@@ -9,7 +9,9 @@ import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X } from 'lucid
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-interface KitchenItem { id: string; name: string; unit: string; sort_order: number; }
+interface KitchenItem { id: string; name: string; unit: string; category: string; sort_order: number; }
+
+const CATEGORIES = ['Vegetables', 'Grocery', 'Miscellaneous'];
 interface LogEntry    { item_id: string; shift: 'in' | 'closing'; quantity: number; }
 
 type Tab = 'view' | 'manage';
@@ -32,9 +34,9 @@ function fmt(d: string) {
 
 function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () => void }) {
   const [editingId, setEditingId]   = useState<string | null>(null);
-  const [editForm, setEditForm]     = useState({ name: '', unit: '' });
+  const [editForm, setEditForm]     = useState({ name: '', unit: '', category: 'Miscellaneous' });
   const [addingNew, setAddingNew]   = useState(false);
-  const [newItem, setNewItem]       = useState({ name: '', unit: '' });
+  const [newItem, setNewItem]       = useState({ name: '', unit: '', category: 'Miscellaneous' });
   const [saving, setSaving]         = useState(false);
 
   async function saveEdit(id: string) {
@@ -43,7 +45,7 @@ function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () =
     const res = await fetch(`/api/daily-kitchen/items/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: editForm.name.trim(), unit: editForm.unit.trim() }),
+      body: JSON.stringify({ name: editForm.name.trim(), unit: editForm.unit.trim(), category: editForm.category }),
     });
     setSaving(false);
     if (!res.ok) { toast.error('Save failed'); return; }
@@ -65,13 +67,13 @@ function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () =
     const res = await fetch('/api/daily-kitchen/items', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newItem.name.trim(), unit: newItem.unit.trim() }),
+      body: JSON.stringify({ name: newItem.name.trim(), unit: newItem.unit.trim(), category: newItem.category }),
     });
     setSaving(false);
     if (!res.ok) { toast.error('Add failed'); return; }
     toast.success('Item added');
     setAddingNew(false);
-    setNewItem({ name: '', unit: '' });
+    setNewItem({ name: '', unit: '', category: 'Miscellaneous' });
     onRefresh();
   }
 
@@ -94,11 +96,18 @@ function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () =
                   placeholder="Item name"
                   autoFocus
                 />
+                <select
+                  value={editForm.category}
+                  onChange={e => setEditForm(p => ({ ...p, category: e.target.value }))}
+                  className="border rounded px-2 py-1.5 text-sm bg-background"
+                >
+                  {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                </select>
                 <input
                   value={editForm.unit}
                   onChange={e => setEditForm(p => ({ ...p, unit: e.target.value }))}
                   onKeyDown={e => e.key === 'Enter' && saveEdit(item.id)}
-                  className="w-16 sm:w-20 border rounded px-2 py-1.5 text-sm text-center"
+                  className="w-16 border rounded px-2 py-1.5 text-sm text-center"
                   placeholder="unit"
                 />
                 <button onClick={() => saveEdit(item.id)} disabled={saving}
@@ -114,12 +123,12 @@ function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () =
               <div className="flex items-center gap-2">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{item.name}</p>
-                  <p className="text-xs text-muted-foreground sm:hidden">{item.unit || '—'}</p>
+                  <p className="text-xs text-muted-foreground">{item.category || '—'} · {item.unit || '—'}</p>
                 </div>
                 <span className="hidden sm:block text-xs text-muted-foreground w-20 text-center shrink-0">{item.unit || '—'}</span>
                 <div className="flex items-center gap-0.5 shrink-0">
                   <button
-                    onClick={() => { setEditingId(item.id); setEditForm({ name: item.name, unit: item.unit }); }}
+                    onClick={() => { setEditingId(item.id); setEditForm({ name: item.name, unit: item.unit, category: item.category || 'Miscellaneous' }); }}
                     className="p-2 sm:p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
                     title="Edit"
                   >
@@ -150,18 +159,25 @@ function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () =
                 className="flex-1 min-w-0 border rounded px-2 py-1.5 text-sm"
                 autoFocus
               />
+              <select
+                value={newItem.category}
+                onChange={e => setNewItem(p => ({ ...p, category: e.target.value }))}
+                className="border rounded px-2 py-1.5 text-sm bg-background"
+              >
+                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+              </select>
               <input
                 value={newItem.unit}
                 onChange={e => setNewItem(p => ({ ...p, unit: e.target.value }))}
                 onKeyDown={e => e.key === 'Enter' && addItem()}
                 placeholder="unit"
-                className="w-16 sm:w-20 border rounded px-2 py-1.5 text-sm text-center"
+                className="w-16 border rounded px-2 py-1.5 text-sm text-center"
               />
               <button onClick={addItem} disabled={saving}
                 className="bg-primary text-primary-foreground px-3 py-1.5 rounded text-sm font-medium disabled:opacity-50 shrink-0">
                 {saving ? '…' : 'Add'}
               </button>
-              <button onClick={() => { setAddingNew(false); setNewItem({ name: '', unit: '' }); }}
+              <button onClick={() => { setAddingNew(false); setNewItem({ name: '', unit: '', category: 'Miscellaneous' }); }}
                 className="p-1.5 text-muted-foreground hover:bg-muted rounded shrink-0">
                 <X className="w-4 h-4" />
               </button>
@@ -238,6 +254,12 @@ export default function DailyKitchenAdminPage() {
 
   const inCount      = logs.filter(l => l.shift === 'in').length;
   const closingCount = logs.filter(l => l.shift === 'closing').length;
+
+  const itemCategories = Array.from(new Set(items.map(i => i.category || 'Miscellaneous')));
+  const itemsByCategory = itemCategories.map(cat => ({
+    category: cat,
+    items: items.filter(i => (i.category || 'Miscellaneous') === cat),
+  }));
 
   const TABS = [
     { id: 'view'   as Tab, label: 'Daily Log'   },
@@ -316,49 +338,54 @@ export default function DailyKitchenAdminPage() {
               </div>
             ) : (
               <>
-                <div className="rounded-xl border overflow-hidden overflow-x-auto">
-                  <table className="w-full text-sm min-w-[480px]">
-                    <thead>
-                      <tr className="bg-muted/50 text-muted-foreground">
-                        <th className="text-left px-4 py-2.5 font-medium w-8">#</th>
-                        <th className="text-left px-4 py-2.5 font-medium">Item</th>
-                        <th className="text-center px-3 py-2.5 font-medium w-12">Unit</th>
-                        <th className="text-center px-4 py-2.5 font-medium w-24">🌅 IN</th>
-                        <th className="text-center px-4 py-2.5 font-medium w-24">🌙 Closing</th>
-                        <th className="text-center px-4 py-2.5 font-medium w-28">📊 Consumed</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {items.map((item, idx) => {
-                        const row  = logMap[item.id] ?? {};
-                        const cons = getConsumption(item.id);
-                        return (
-                          <tr key={item.id} className="hover:bg-muted/30 transition-colors">
-                            <td className="px-4 py-2.5 text-muted-foreground text-xs">{idx + 1}</td>
-                            <td className="px-4 py-2.5 font-medium">{item.name}</td>
-                            <td className="px-3 py-2.5 text-center text-muted-foreground text-xs">{item.unit}</td>
-                            <td className="px-4 py-2.5 text-center">
-                              {row.in !== undefined
-                                ? <span className="inline-block px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 font-semibold text-sm">{row.in}</span>
-                                : <span className="text-muted-foreground/40">—</span>}
-                            </td>
-                            <td className="px-4 py-2.5 text-center">
-                              {row.closing !== undefined
-                                ? <span className="inline-block px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 dark:bg-indigo-500/15 dark:text-indigo-300 font-semibold text-sm">{row.closing}</span>
-                                : <span className="text-muted-foreground/40">—</span>}
-                            </td>
-                            <td className="px-4 py-2.5 text-center">
-                              {cons === undefined
-                                ? <span className="text-muted-foreground/40">—</span>
-                                : cons <= 0
-                                  ? <span className="text-muted-foreground text-sm">{cons}</span>
-                                  : <span className="inline-block px-2 py-0.5 rounded-md bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300 font-semibold text-sm">{cons}</span>}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                <div className="space-y-4">
+                  {itemsByCategory.map(({ category, items: catItems }) => (
+                    <div key={category}>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1 mb-1">{category}</p>
+                      <div className="rounded-xl border overflow-hidden overflow-x-auto">
+                        <table className="w-full text-sm min-w-[480px]">
+                          <thead>
+                            <tr className="bg-muted/50 text-muted-foreground">
+                              <th className="text-left px-4 py-2 font-medium">Item</th>
+                              <th className="text-center px-3 py-2 font-medium w-12">Unit</th>
+                              <th className="text-center px-4 py-2 font-medium w-24">🌅 IN</th>
+                              <th className="text-center px-4 py-2 font-medium w-24">🌙 Closing</th>
+                              <th className="text-center px-4 py-2 font-medium w-28">📊 Consumed</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border">
+                            {catItems.map(item => {
+                              const row  = logMap[item.id] ?? {};
+                              const cons = getConsumption(item.id);
+                              return (
+                                <tr key={item.id} className="hover:bg-muted/30 transition-colors">
+                                  <td className="px-4 py-2.5 font-medium">{item.name}</td>
+                                  <td className="px-3 py-2.5 text-center text-muted-foreground text-xs">{item.unit}</td>
+                                  <td className="px-4 py-2.5 text-center">
+                                    {row.in !== undefined
+                                      ? <span className="inline-block px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 font-semibold text-sm">{row.in}</span>
+                                      : <span className="text-muted-foreground/40">—</span>}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-center">
+                                    {row.closing !== undefined
+                                      ? <span className="inline-block px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 dark:bg-indigo-500/15 dark:text-indigo-300 font-semibold text-sm">{row.closing}</span>
+                                      : <span className="text-muted-foreground/40">—</span>}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-center">
+                                    {cons === undefined
+                                      ? <span className="text-muted-foreground/40">—</span>
+                                      : cons <= 0
+                                        ? <span className="text-muted-foreground text-sm">{cons}</span>
+                                        : <span className="inline-block px-2 py-0.5 rounded-md bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300 font-semibold text-sm">{cons}</span>}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </>
             )}
