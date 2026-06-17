@@ -48,6 +48,17 @@ export async function POST(request: NextRequest) {
 
   if (newRows.length === 0) return NextResponse.json({ saved: 0 });
 
+  // Always record individual submissions in the audit trail BEFORE accumulation
+  await supabase.from('daily_kitchen_log_entries').insert(
+    newRows.map(r => ({
+      item_id:    r.item_id,
+      log_date:   r.log_date,
+      shift:      r.shift,
+      quantity:   r.quantity,   // original submitted amount, not cumulative
+      logged_by:  r.logged_by,
+    }))
+  );
+
   let rows = newRows;
 
   // Morning IN is additive — add to whatever was already logged this shift
@@ -88,11 +99,25 @@ export async function GET(request: NextRequest) {
   if (!date) return NextResponse.json({ error: 'date required' }, { status: 400 });
 
   const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from('daily_kitchen_logs')
-    .select('item_id, shift, quantity, logged_by, profiles(name)')
-    .eq('log_date', date);
+  const [{ data: logs, error }, { data: entries }] = await Promise.all([
+    supabase
+      .from('daily_kitchen_logs')
+      .select('item_id, shift, quantity, logged_by, profiles!logged_by(name)')
+      .eq('log_date', date),
+    supabase
+      .from('daily_kitchen_log_entries')
+      .select('item_id, shift, quantity, created_at, profiles!logged_by(name)')
+      .eq('log_date', date)
+      .order('created_at', { ascending: true }),
+  ]);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ logs: data ?? [] });
+
+  const mapName = (row: { profiles: unknown }) =>
+    (row.profiles as unknown as { name: string } | null)?.name ?? null;
+
+  return NextResponse.json({
+    logs: (logs ?? []).map(l => ({ ...l, logged_by_name: mapName(l) })),
+    entries: (entries ?? []).map(e => ({ ...e, logged_by_name: mapName(e) })),
+  });
 }

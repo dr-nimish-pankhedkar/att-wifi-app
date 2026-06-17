@@ -235,7 +235,7 @@ function BucketCard({
     if (!res.ok) { toast.error('Add failed'); return; }
     toast.success('Item added');
     setAddingItem(false);
-    setNewItem({ name: '', unit: '', min_level: '0' });
+    setNewItem({ name: '', unit: '', min_level: '0', vendor_1: '', vendor_2: '' });
     onRefresh();
   }
 
