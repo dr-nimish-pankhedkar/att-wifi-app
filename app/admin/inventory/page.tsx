@@ -25,6 +25,8 @@ interface InventoryItem {
   min_level: number;
   sort_order: number;
   active: boolean;
+  vendor_1: string | null;
+  vendor_2: string | null;
   latest: { quantity: number; log_date: string; notes: string | null; logged_by_name: string | null; created_at: string | null } | null;
 }
 
@@ -101,9 +103,9 @@ function BucketCard({
   const [editingBucket, setEditingBucket] = useState(false);
   const [bucketName, setBucketName] = useState(bucket.name);
   const [editingItem, setEditingItem] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', unit: '', min_level: '' });
+  const [editForm, setEditForm] = useState({ name: '', unit: '', min_level: '', vendor_1: '', vendor_2: '' });
   const [addingItem, setAddingItem] = useState(false);
-  const [newItem, setNewItem] = useState({ name: '', unit: '', min_level: '0' });
+  const [newItem, setNewItem] = useState({ name: '', unit: '', min_level: '0', vendor_1: '', vendor_2: '' });
   const [movingItem, setMovingItem] = useState<string | null>(null);
   const [editingUnit, setEditingUnit] = useState<string | null>(null);
   const [unitDraft, setUnitDraft] = useState('');
@@ -180,6 +182,8 @@ function BucketCard({
         name: editForm.name,
         unit: editForm.unit,
         min_level: Number(editForm.min_level),
+        vendor_1: editForm.vendor_1,
+        vendor_2: editForm.vendor_2,
       }),
     });
     setSaving(false);
@@ -221,6 +225,8 @@ function BucketCard({
         name: newItem.name.trim(),
         unit: newItem.unit,
         min_level: Number(newItem.min_level),
+        vendor_1: newItem.vendor_1,
+        vendor_2: newItem.vendor_2,
         bucket_id: bucket.id,
         category: bucket.name,
       }),
@@ -322,6 +328,18 @@ function BucketCard({
                         className="w-20 border rounded px-2 py-1 text-sm"
                         placeholder="min"
                       />
+                      <input
+                        value={editForm.vendor_1}
+                        onChange={e => setEditForm(p => ({ ...p, vendor_1: e.target.value }))}
+                        className="w-28 border rounded px-2 py-1 text-sm"
+                        placeholder="Vendor 1"
+                      />
+                      <input
+                        value={editForm.vendor_2}
+                        onChange={e => setEditForm(p => ({ ...p, vendor_2: e.target.value }))}
+                        className="w-28 border rounded px-2 py-1 text-sm"
+                        placeholder="Vendor 2 (alt)"
+                      />
                       <button onClick={() => saveItemEdit(item)} disabled={saving} className="p-1 text-green-600">
                         <Check className="w-4 h-4" />
                       </button>
@@ -369,7 +387,15 @@ function BucketCard({
                     ) : (
                       <>
                         <GripVertical className="w-4 h-4 text-muted-foreground/30 cursor-grab active:cursor-grabbing shrink-0" />
-                        <span className="flex-1 text-sm font-medium">{item.name}</span>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium">{item.name}</span>
+                          {(item.vendor_1 || item.vendor_2) && (
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {item.vendor_1 && <span className="mr-2">🏪 {item.vendor_1}</span>}
+                              {item.vendor_2 && <span className="text-muted-foreground/60">alt: {item.vendor_2}</span>}
+                            </p>
+                          )}
+                        </div>
                         {/* Inline unit editor */}
                         {editingUnit === item.id ? (
                           <input
@@ -403,7 +429,7 @@ function BucketCard({
                             <MoveRight className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => { setEditingItem(item.id); setEditForm({ name: item.name, unit: item.unit, min_level: String(item.min_level) }); }}
+                            onClick={() => { setEditingItem(item.id); setEditForm({ name: item.name, unit: item.unit, min_level: String(item.min_level), vendor_1: item.vendor_1 ?? '', vendor_2: item.vendor_2 ?? '' }); }}
                             className="p-1.5 text-muted-foreground hover:text-foreground"
                           >
                             <Pencil className="w-3.5 h-3.5" />
@@ -513,6 +539,18 @@ function BucketCard({
                     onChange={e => setNewItem(p => ({ ...p, min_level: e.target.value }))}
                     placeholder="min"
                     className="w-16 border rounded px-2 py-1 text-sm"
+                  />
+                  <input
+                    value={newItem.vendor_1}
+                    onChange={e => setNewItem(p => ({ ...p, vendor_1: e.target.value }))}
+                    placeholder="Vendor 1"
+                    className="w-24 border rounded px-2 py-1 text-sm"
+                  />
+                  <input
+                    value={newItem.vendor_2}
+                    onChange={e => setNewItem(p => ({ ...p, vendor_2: e.target.value }))}
+                    placeholder="Vendor 2"
+                    className="w-24 border rounded px-2 py-1 text-sm"
                   />
                   <button onClick={addItemToBucket} disabled={saving} className={`px-3 py-1 rounded text-xs font-medium ${color.header} text-white disabled:opacity-50`}>
                     {saving ? '…' : 'Add'}
@@ -739,23 +777,78 @@ export default function InventoryPage() {
             </div>
           )}
 
-          {/* Shopping: empty state */}
-          {tab === 'shopping' && shoppingBuckets.length === 0 && (
-            <div className="text-center py-16 text-muted-foreground">
-              <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="font-medium">All stocked up!</p>
-            </div>
-          )}
+          {/* ── Shopping tab: vendor-wise list ── */}
+          {tab === 'shopping' && (() => {
+            const needed = items.filter(i =>
+              stockStatus(i) === 'critical' || (stockStatus(i) === 'none' && i.min_level > 0)
+            );
+            if (needed.length === 0) return (
+              <div className="text-center py-16 text-muted-foreground">
+                <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p className="font-medium">All stocked up!</p>
+              </div>
+            );
+            // Group by vendor_1; fallback to "No Vendor"
+            const vendorMap: Record<string, InventoryItem[]> = {};
+            for (const item of needed) {
+              const v = item.vendor_1?.trim() || 'No Vendor';
+              if (!vendorMap[v]) vendorMap[v] = [];
+              vendorMap[v].push(item);
+            }
+            // Sort: named vendors first, "No Vendor" last
+            const vendors = Object.keys(vendorMap).sort((a, b) =>
+              a === 'No Vendor' ? 1 : b === 'No Vendor' ? -1 : a.localeCompare(b)
+            );
+            return (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">{needed.length} item{needed.length !== 1 ? 's' : ''} to restock · {vendors.filter(v => v !== 'No Vendor').length} vendor{vendors.filter(v => v !== 'No Vendor').length !== 1 ? 's' : ''}</p>
+                {vendors.map((vendor, vi) => (
+                  <div key={vendor}>
+                    <h3 className="font-semibold text-sm uppercase tracking-wide mb-2 flex items-center gap-2">
+                      <span className={vi === vendors.length - 1 && vendor === 'No Vendor' ? 'text-muted-foreground' : 'text-foreground'}>
+                        🏪 {vendor}
+                      </span>
+                      <span className="text-xs font-normal text-muted-foreground">{vendorMap[vendor].length} items</span>
+                    </h3>
+                    <div className="rounded-xl border overflow-hidden divide-y">
+                      {vendorMap[vendor].map(item => {
+                        const qty = item.latest?.quantity ?? null;
+                        const diff = qty !== null ? item.min_level - qty : null;
+                        return (
+                          <div key={item.id} className="flex items-center justify-between px-4 py-2.5 bg-red-50">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium">{item.name}</p>
+                              {item.vendor_2 && (
+                                <p className="text-xs text-muted-foreground">alt: {item.vendor_2}</p>
+                              )}
+                            </div>
+                            <div className="text-right text-sm shrink-0 ml-4">
+                              {qty !== null ? (
+                                <>
+                                  <span className="text-red-600 font-medium">{qty} {item.unit}</span>
+                                  <span className="text-muted-foreground ml-1 text-xs">/ min {item.min_level}</span>
+                                  {diff !== null && diff > 0 && (
+                                    <span className="ml-2 text-xs text-red-700 font-semibold">need +{diff}</span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-amber-600 italic text-xs">never logged</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
-          {/* Bucket grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {displayBuckets.map((bucket, idx) => {
-              const bucketItems = (itemsByBucket[bucket.id] ?? []).filter(i =>
-                tab === 'shopping'
-                  ? (stockStatus(i) === 'critical' || (stockStatus(i) === 'none' && i.min_level > 0))
-                  : true
-              );
-              if (tab === 'shopping' && bucketItems.length === 0) return null;
+          {/* ── Non-shopping tabs: bucket grid ── */}
+          {tab !== 'shopping' && <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {buckets.map((bucket, idx) => {
+              const bucketItems = itemsByBucket[bucket.id] ?? [];
               return (
                 <BucketCard
                   key={bucket.id}
@@ -786,7 +879,7 @@ export default function InventoryPage() {
                 allBuckets={buckets}
               />
             )}
-          </div>
+          </div>}
 
           {/* Add bucket (manage tab) */}
           {tab === 'manage' && (

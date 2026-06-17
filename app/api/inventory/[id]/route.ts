@@ -26,6 +26,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   if (body.sort_order !== undefined) allowed.sort_order = body.sort_order;
   if (body.active !== undefined) allowed.active = body.active;
   if ('bucket_id' in body) allowed.bucket_id = body.bucket_id;
+  if (body.vendor_1 !== undefined) allowed.vendor_1 = body.vendor_1;
+  if (body.vendor_2 !== undefined) allowed.vendor_2 = body.vendor_2;
 
   const { data, error } = await supabase
     .from('inventory_items')
