@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import { ShoppingCart, ClipboardList, Package, Settings2, Plus, Trash2, Pencil, Check, X } from 'lucide-react';
+import { ShoppingCart, ClipboardList, Package, Settings2, Plus, Trash2, Pencil, Check, X, GripVertical } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 /* ── Types ─────────────────────────────────────────────── */
 
@@ -14,7 +15,7 @@ interface InventoryItem {
   min_level: number;
   sort_order: number;
   active: boolean;
-  latest: { quantity: number; log_date: string; notes: string | null } | null;
+  latest: { quantity: number; log_date: string; notes: string | null; logged_by_name: string | null; created_at: string | null } | null;
 }
 
 type Tab = 'stock' | 'log' | 'shopping' | 'manage';
@@ -95,11 +96,21 @@ function StockTab({ items }: { items: InventoryItem[] }) {
                   </div>
                   <div className="flex items-center gap-3 text-right">
                     <StockBadge item={item} />
-                    {item.latest && (
-                      <span className="text-xs text-muted-foreground hidden sm:block">
-                        {new Date(item.latest.log_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                      </span>
-                    )}
+                    {item.latest ? (
+                      <div className="text-right hidden sm:block">
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(item.latest.log_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                          {item.latest.created_at && (
+                            <span className="ml-1">
+                              {new Date(item.latest.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            </span>
+                          )}
+                        </p>
+                        {item.latest.logged_by_name && (
+                          <p className="text-xs text-muted-foreground/70">{item.latest.logged_by_name}</p>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               );
@@ -296,11 +307,16 @@ interface EditingItem {
 }
 
 function ManageTab({ items, onRefresh }: { items: InventoryItem[]; onRefresh: () => void }) {
+  const [localItems, setLocalItems] = useState<InventoryItem[]>(items);
   const [editing, setEditing] = useState<EditingItem | null>(null);
   const [adding, setAdding] = useState(false);
   const [newItem, setNewItem] = useState({ name: '', category: CATEGORIES[0], unit: '', min_level: '0' });
   const [saving, setSaving] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [overKey, setOverKey] = useState<string | null>(null);
+
+  useEffect(() => { setLocalItems(items); }, [items]);
 
   async function saveEdit() {
     if (!editing) return;
@@ -348,7 +364,27 @@ function ManageTab({ items, onRefresh }: { items: InventoryItem[]; onRefresh: ()
     onRefresh();
   }
 
-  const groups = groupBy(items);
+  function handleDrop(dragId: string, overId: string) {
+    if (dragId === overId) return;
+    const reordered = [...localItems];
+    const fromIdx = reordered.findIndex(i => i.id === dragId);
+    const toIdx   = reordered.findIndex(i => i.id === overId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    setLocalItems(reordered);
+    Promise.all(
+      reordered.map((item, i) =>
+        fetch(`/api/inventory/${item.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sort_order: (i + 1) * 10 }),
+        })
+      )
+    ).then(() => onRefresh());
+  }
+
+  const groups = groupBy(localItems);
 
   return (
     <div className="space-y-4">
@@ -436,7 +472,20 @@ function ManageTab({ items, onRefresh }: { items: InventoryItem[]; onRefresh: ()
             <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">{cat}</h3>
             <div className="rounded-lg border divide-y overflow-hidden">
               {visible.map((item) => (
-                <div key={item.id} className={`px-4 py-2.5 ${!item.active ? 'opacity-50' : ''}`}>
+                <div
+                  key={item.id}
+                  draggable={editing?.id !== item.id}
+                  onDragStart={e => { setDragKey(item.id); e.dataTransfer.effectAllowed = 'move'; }}
+                  onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setOverKey(item.id); }}
+                  onDrop={e => { e.preventDefault(); if (dragKey) handleDrop(dragKey, item.id); setDragKey(null); setOverKey(null); }}
+                  onDragEnd={() => { setDragKey(null); setOverKey(null); }}
+                  className={cn(
+                    'px-4 py-2.5 transition-colors',
+                    !item.active && 'opacity-50',
+                    dragKey === item.id && 'opacity-40',
+                    overKey === item.id && dragKey !== item.id && 'bg-primary/5 border-t-2 border-primary'
+                  )}
+                >
                   {editing?.id === item.id ? (
                     <div className="flex flex-wrap items-center gap-2">
                       <input
@@ -472,8 +521,9 @@ function ManageTab({ items, onRefresh }: { items: InventoryItem[]; onRefresh: ()
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between">
-                      <div>
+                    <div className="flex items-center gap-2">
+                      <GripVertical className="w-4 h-4 text-muted-foreground/40 cursor-grab active:cursor-grabbing shrink-0" />
+                      <div className="flex-1 min-w-0">
                         <span className="text-sm font-medium">{item.name}</span>
                         <span className="ml-2 text-xs text-muted-foreground">{item.unit}</span>
                         {item.min_level > 0 && (
@@ -481,7 +531,7 @@ function ManageTab({ items, onRefresh }: { items: InventoryItem[]; onRefresh: ()
                         )}
                         {!item.active && <span className="ml-2 text-xs text-red-500">(inactive)</span>}
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={() =>
                             setEditing({

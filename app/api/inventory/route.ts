@@ -27,13 +27,12 @@ export async function GET() {
 
   // Get latest log per item
   const itemIds = (items ?? []).map((i) => i.id);
-  let latestLogs: Record<string, { quantity: number; log_date: string; notes: string | null }> = {};
+  let latestLogs: Record<string, { quantity: number; log_date: string; notes: string | null; logged_by_name: string | null; created_at: string | null }> = {};
 
   if (itemIds.length > 0) {
-    // Fetch recent logs sorted by log_date desc, then pick first per item_id
     const { data: logs } = await supabase
       .from('inventory_logs')
-      .select('item_id, quantity, log_date, notes')
+      .select('item_id, quantity, log_date, notes, created_at, profiles!logged_by(name)')
       .in('item_id', itemIds)
       .order('log_date', { ascending: false })
       .order('created_at', { ascending: false });
@@ -44,6 +43,8 @@ export async function GET() {
           quantity: log.quantity,
           log_date: log.log_date,
           notes: log.notes,
+          logged_by_name: (log.profiles as { name: string } | null)?.name ?? null,
+          created_at: log.created_at ?? null,
         };
       }
     }
