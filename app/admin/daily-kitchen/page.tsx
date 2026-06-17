@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 interface KitchenItem { id: string; name: string; unit: string; category: string; sort_order: number; }
 
-const CATEGORIES = ['Vegetables', 'Grocery', 'Miscellaneous'];
+const DEFAULT_CATEGORIES = ['Vegetables', 'Grocery', 'Miscellaneous'];
 interface LogEntry    { item_id: string; shift: 'in' | 'closing'; quantity: number; }
 
 type Tab = 'view' | 'manage';
@@ -32,7 +32,26 @@ function fmt(d: string) {
    MANAGE TAB — item CRUD
 ══════════════════════════════════════════════════ */
 
+function CategoryInput({ value, onChange, categories }: { value: string; onChange: (v: string) => void; categories: string[] }) {
+  const listId = 'kitchen-categories';
+  return (
+    <>
+      <datalist id={listId}>
+        {categories.map(c => <option key={c} value={c} />)}
+      </datalist>
+      <input
+        list={listId}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder="Category"
+        className="w-28 border rounded px-2 py-1.5 text-sm bg-background"
+      />
+    </>
+  );
+}
+
 function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () => void }) {
+  const categories = Array.from(new Set([...DEFAULT_CATEGORIES, ...items.map(i => i.category).filter(Boolean)]));
   const [editingId, setEditingId]   = useState<string | null>(null);
   const [editForm, setEditForm]     = useState({ name: '', unit: '', category: 'Miscellaneous' });
   const [addingNew, setAddingNew]   = useState(false);
@@ -96,13 +115,11 @@ function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () =
                   placeholder="Item name"
                   autoFocus
                 />
-                <select
+                <CategoryInput
                   value={editForm.category}
-                  onChange={e => setEditForm(p => ({ ...p, category: e.target.value }))}
-                  className="border rounded px-2 py-1.5 text-sm bg-background"
-                >
-                  {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                </select>
+                  onChange={v => setEditForm(p => ({ ...p, category: v }))}
+                  categories={categories}
+                />
                 <input
                   value={editForm.unit}
                   onChange={e => setEditForm(p => ({ ...p, unit: e.target.value }))}
@@ -159,13 +176,11 @@ function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () =
                 className="flex-1 min-w-0 border rounded px-2 py-1.5 text-sm"
                 autoFocus
               />
-              <select
+              <CategoryInput
                 value={newItem.category}
-                onChange={e => setNewItem(p => ({ ...p, category: e.target.value }))}
-                className="border rounded px-2 py-1.5 text-sm bg-background"
-              >
-                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-              </select>
+                onChange={v => setNewItem(p => ({ ...p, category: v }))}
+                categories={categories}
+              />
               <input
                 value={newItem.unit}
                 onChange={e => setNewItem(p => ({ ...p, unit: e.target.value }))}
