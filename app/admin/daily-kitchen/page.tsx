@@ -29,230 +29,291 @@ function fmt(d: string) {
 }
 
 /* ══════════════════════════════════════════════════
-   MANAGE TAB — item CRUD
+   MANAGE TAB — bucket cards + drag between buckets
 ══════════════════════════════════════════════════ */
 
-function CategoryInput({ value, onChange, categories }: { value: string; onChange: (v: string) => void; categories: string[] }) {
-  const listId = 'kitchen-categories';
-  return (
-    <>
-      <datalist id={listId}>
-        {categories.map(c => <option key={c} value={c} />)}
-      </datalist>
-      <input
-        list={listId}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder="Category"
-        className="w-28 border rounded px-2 py-1.5 text-sm bg-background"
-      />
-    </>
-  );
-}
+const DK_COLORS = [
+  { border: 'border-teal-500',    bg: 'bg-teal-50',    header: 'bg-teal-500',    text: 'text-teal-700'    },
+  { border: 'border-violet-500',  bg: 'bg-violet-50',  header: 'bg-violet-500',  text: 'text-violet-700'  },
+  { border: 'border-orange-500',  bg: 'bg-orange-50',  header: 'bg-orange-500',  text: 'text-orange-700'  },
+  { border: 'border-blue-500',    bg: 'bg-blue-50',    header: 'bg-blue-500',    text: 'text-blue-700'    },
+  { border: 'border-rose-500',    bg: 'bg-rose-50',    header: 'bg-rose-500',    text: 'text-rose-700'    },
+  { border: 'border-emerald-500', bg: 'bg-emerald-50', header: 'bg-emerald-500', text: 'text-emerald-700' },
+  { border: 'border-amber-500',   bg: 'bg-amber-50',   header: 'bg-amber-500',   text: 'text-amber-700'   },
+  { border: 'border-indigo-500',  bg: 'bg-indigo-50',  header: 'bg-indigo-500',  text: 'text-indigo-700'  },
+];
 
-function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () => void }) {
-  const categories = Array.from(new Set([...DEFAULT_CATEGORIES, ...items.map(i => i.category).filter(Boolean)]));
-  const [localItems, setLocalItems] = useState<KitchenItem[]>(items);
+function DKBucketCard({ category, items, colorIdx, dragItemId, onDragStart, onDrop, onRenameCategory, onRefresh }: {
+  category: string;
+  items: KitchenItem[];
+  colorIdx: number;
+  dragItemId: string | null;
+  onDragStart: (id: string) => void;
+  onDrop: (dragId: string, targetId: string | null, targetCategory: string) => void;
+  onRenameCategory: (oldCat: string, newCat: string) => void;
+  onRefresh: () => void;
+}) {
+  const color = DK_COLORS[colorIdx % DK_COLORS.length];
+  const [isOver, setIsOver]         = useState(false);
+  const [overItemId, setOverItemId] = useState<string | null>(null);
+  const [renaming, setRenaming]     = useState(false);
+  const [catDraft, setCatDraft]     = useState(category);
+  const [addingItem, setAddingItem] = useState(false);
+  const [newItem, setNewItem]       = useState({ name: '', unit: '' });
   const [editingId, setEditingId]   = useState<string | null>(null);
-  const [editForm, setEditForm]     = useState({ name: '', unit: '', category: 'Miscellaneous' });
-  const [addingNew, setAddingNew]   = useState(false);
-  const [newItem, setNewItem]       = useState({ name: '', unit: '', category: 'Miscellaneous' });
+  const [editForm, setEditForm]     = useState({ name: '', unit: '' });
   const [saving, setSaving]         = useState(false);
-  const [dragIndex, setDragIndex]   = useState<number | null>(null);
-  const [overIndex, setOverIndex]   = useState<number | null>(null);
 
-  useEffect(() => { setLocalItems(items); }, [items]);
+  async function saveRename() {
+    const newCat = catDraft.trim();
+    if (!newCat || newCat === category) { setRenaming(false); return; }
+    await Promise.all(items.map(item =>
+      fetch(`/api/daily-kitchen/items/${item.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: newCat }),
+      })
+    ));
+    onRenameCategory(category, newCat);
+    setRenaming(false);
+    onRefresh();
+  }
 
   async function saveEdit(id: string) {
-    if (!editForm.name.trim()) { toast.error('Name required'); return; }
+    if (!editForm.name.trim()) return;
     setSaving(true);
-    const res = await fetch(`/api/daily-kitchen/items/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: editForm.name.trim(), unit: editForm.unit.trim(), category: editForm.category }),
+    await fetch(`/api/daily-kitchen/items/${id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: editForm.name.trim(), unit: editForm.unit.trim() }),
     });
     setSaving(false);
-    if (!res.ok) { toast.error('Save failed'); return; }
     setEditingId(null);
     onRefresh();
   }
 
   async function deleteItem(id: string, name: string) {
-    if (!confirm(`Remove "${name}" from daily kitchen list?`)) return;
-    const res = await fetch(`/api/daily-kitchen/items/${id}`, { method: 'DELETE' });
-    if (!res.ok) { toast.error('Delete failed'); return; }
+    if (!confirm(`Remove "${name}"?`)) return;
+    await fetch(`/api/daily-kitchen/items/${id}`, { method: 'DELETE' });
     toast.success('Item removed');
     onRefresh();
   }
 
   async function addItem() {
-    if (!newItem.name.trim()) { toast.error('Name required'); return; }
+    if (!newItem.name.trim()) return;
     setSaving(true);
-    const res = await fetch('/api/daily-kitchen/items', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newItem.name.trim(), unit: newItem.unit.trim(), category: newItem.category }),
+    await fetch('/api/daily-kitchen/items', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newItem.name.trim(), unit: newItem.unit.trim(), category }),
     });
     setSaving(false);
-    if (!res.ok) { toast.error('Add failed'); return; }
-    toast.success('Item added');
-    setAddingNew(false);
-    setNewItem({ name: '', unit: '', category: 'Miscellaneous' });
+    setAddingItem(false);
+    setNewItem({ name: '', unit: '' });
     onRefresh();
   }
 
-  function handleDragStart(e: React.DragEvent, idx: number) {
-    setDragIndex(idx);
-    e.dataTransfer.effectAllowed = 'move';
-  }
-
-  function handleDragOver(e: React.DragEvent, idx: number) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setOverIndex(idx);
-  }
-
-  function handleDrop(e: React.DragEvent, idx: number) {
-    e.preventDefault();
-    if (dragIndex === null || dragIndex === idx) { setDragIndex(null); setOverIndex(null); return; }
-    const reordered = [...localItems];
-    const [moved] = reordered.splice(dragIndex, 1);
-    reordered.splice(idx, 0, moved);
-    setLocalItems(reordered);
-    setDragIndex(null);
-    setOverIndex(null);
-    Promise.all(
-      reordered.map((item, i) =>
-        fetch(`/api/daily-kitchen/items/${item.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sort_order: (i + 1) * 10 }),
-        })
-      )
-    ).then(() => onRefresh());
-  }
-
   return (
-    <div className="rounded-xl border overflow-hidden">
-      <div className="bg-muted/50 px-4 py-2.5 text-xs font-medium text-muted-foreground flex justify-between">
-        <span>Item ({localItems.length})</span>
-        <span className="hidden sm:inline">Unit</span>
+    <div
+      className={cn(`rounded-xl border-2 overflow-hidden shadow-sm transition-all`, color.border, isOver && 'ring-2 ring-primary ring-offset-1')}
+      onDragOver={e => { e.preventDefault(); setIsOver(true); }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsOver(false); }}
+      onDrop={e => { e.preventDefault(); setIsOver(false); if (dragItemId) onDrop(dragItemId, null, category); }}
+    >
+      {/* Header */}
+      <div className={`${color.header} text-white px-4 py-2.5 flex items-center justify-between`}>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {renaming ? (
+            <div className="flex items-center gap-1 flex-1">
+              <input
+                value={catDraft}
+                onChange={e => setCatDraft(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && saveRename()}
+                className="flex-1 bg-white/20 text-white placeholder-white/60 rounded px-2 py-0.5 text-sm font-semibold outline-none border border-white/40"
+                autoFocus
+              />
+              <button onClick={saveRename} className="p-1 hover:bg-white/20 rounded"><Check className="w-4 h-4" /></button>
+              <button onClick={() => { setRenaming(false); setCatDraft(category); }} className="p-1 hover:bg-white/20 rounded"><X className="w-4 h-4" /></button>
+            </div>
+          ) : (
+            <>
+              <span className="font-bold text-sm truncate">{category}</span>
+              <span className="text-white/60 text-xs shrink-0">{items.length} items</span>
+            </>
+          )}
+        </div>
+        {!renaming && (
+          <button onClick={() => setRenaming(true)} className="p-1 hover:bg-white/20 rounded ml-2 shrink-0" title="Rename bucket">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
-      <div className="divide-y divide-border">
-        {localItems.map((item, idx) => (
+
+      {/* Item rows */}
+      <div className="divide-y">
+        {items.map(item => (
           <div
             key={item.id}
             draggable={editingId !== item.id}
-            onDragStart={e => handleDragStart(e, idx)}
-            onDragOver={e => handleDragOver(e, idx)}
-            onDrop={e => handleDrop(e, idx)}
-            onDragEnd={() => { setDragIndex(null); setOverIndex(null); }}
+            onDragStart={e => { e.stopPropagation(); e.dataTransfer.effectAllowed = 'move'; onDragStart(item.id); }}
+            onDragOver={e => { e.preventDefault(); e.stopPropagation(); setOverItemId(item.id); setIsOver(false); }}
+            onDragLeave={() => setOverItemId(null)}
+            onDrop={e => { e.preventDefault(); e.stopPropagation(); setOverItemId(null); setIsOver(false); if (dragItemId) onDrop(dragItemId, item.id, category); }}
+            onDragEnd={() => setOverItemId(null)}
             className={cn(
-              'px-4 py-2 transition-colors',
-              dragIndex === idx && 'opacity-40',
-              overIndex === idx && dragIndex !== idx && 'bg-primary/5 border-t-2 border-primary'
+              'px-3 py-2 transition-colors',
+              dragItemId === item.id && 'opacity-40',
+              overItemId === item.id && dragItemId !== item.id && 'bg-primary/5 border-t-2 border-primary',
             )}
           >
             {editingId === item.id ? (
               <div className="flex items-center gap-2">
-                <input
-                  value={editForm.name}
-                  onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
+                <input value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
                   onKeyDown={e => e.key === 'Enter' && saveEdit(item.id)}
-                  className="flex-1 min-w-0 border rounded px-2 py-1.5 text-sm"
-                  placeholder="Item name"
-                  autoFocus
-                />
-                <CategoryInput
-                  value={editForm.category}
-                  onChange={v => setEditForm(p => ({ ...p, category: v }))}
-                  categories={categories}
-                />
-                <input
-                  value={editForm.unit}
-                  onChange={e => setEditForm(p => ({ ...p, unit: e.target.value }))}
+                  className="flex-1 border rounded px-2 py-1 text-sm" autoFocus />
+                <input value={editForm.unit} onChange={e => setEditForm(p => ({ ...p, unit: e.target.value }))}
                   onKeyDown={e => e.key === 'Enter' && saveEdit(item.id)}
-                  className="w-16 border rounded px-2 py-1.5 text-sm text-center"
-                  placeholder="unit"
-                />
-                <button onClick={() => saveEdit(item.id)} disabled={saving}
-                  className="p-1.5 text-green-600 hover:bg-green-50 rounded shrink-0">
-                  <Check className="w-4 h-4" />
-                </button>
-                <button onClick={() => setEditingId(null)}
-                  className="p-1.5 text-muted-foreground hover:bg-muted rounded shrink-0">
-                  <X className="w-4 h-4" />
-                </button>
+                  className="w-14 border rounded px-2 py-1 text-sm" placeholder="unit" />
+                <button onClick={() => saveEdit(item.id)} disabled={saving} className="p-1 text-green-600"><Check className="w-4 h-4" /></button>
+                <button onClick={() => setEditingId(null)} className="p-1 text-muted-foreground"><X className="w-4 h-4" /></button>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <GripVertical className="w-4 h-4 text-muted-foreground/40 cursor-grab active:cursor-grabbing shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{item.name}</p>
-                  <p className="text-xs text-muted-foreground">{item.category || '—'} · {item.unit || '—'}</p>
-                </div>
-                <span className="hidden sm:block text-xs text-muted-foreground w-20 text-center shrink-0">{item.unit || '—'}</span>
+                <GripVertical className="w-4 h-4 text-muted-foreground/30 cursor-grab active:cursor-grabbing shrink-0" />
+                <span className="flex-1 text-sm font-medium">{item.name}</span>
+                <span className="text-xs text-muted-foreground">{item.unit || '—'}</span>
                 <div className="flex items-center gap-0.5 shrink-0">
-                  <button
-                    onClick={() => { setEditingId(item.id); setEditForm({ name: item.name, unit: item.unit, category: item.category || 'Miscellaneous' }); }}
-                    className="p-2 sm:p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
-                    title="Edit"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => deleteItem(item.id, item.name)}
-                    className="p-2 sm:p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-50 rounded"
-                    title="Remove"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <button onClick={() => { setEditingId(item.id); setEditForm({ name: item.name, unit: item.unit }); }}
+                    className="p-1.5 text-muted-foreground hover:text-foreground"><Pencil className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => deleteItem(item.id, item.name)}
+                    className="p-1.5 text-muted-foreground hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
               </div>
             )}
           </div>
         ))}
+      </div>
 
-        {/* Add new item row */}
-        <div className="px-4 py-2.5 bg-muted/20">
-          {addingNew ? (
-            <div className="flex items-center gap-2">
-              <input
-                value={newItem.name}
-                onChange={e => setNewItem(p => ({ ...p, name: e.target.value }))}
-                onKeyDown={e => e.key === 'Enter' && addItem()}
-                placeholder="Item name"
-                className="flex-1 min-w-0 border rounded px-2 py-1.5 text-sm"
-                autoFocus
-              />
-              <CategoryInput
-                value={newItem.category}
-                onChange={v => setNewItem(p => ({ ...p, category: v }))}
-                categories={categories}
-              />
-              <input
-                value={newItem.unit}
-                onChange={e => setNewItem(p => ({ ...p, unit: e.target.value }))}
-                onKeyDown={e => e.key === 'Enter' && addItem()}
-                placeholder="unit"
-                className="w-16 border rounded px-2 py-1.5 text-sm text-center"
-              />
-              <button onClick={addItem} disabled={saving}
-                className="bg-primary text-primary-foreground px-3 py-1.5 rounded text-sm font-medium disabled:opacity-50 shrink-0">
-                {saving ? '…' : 'Add'}
-              </button>
-              <button onClick={() => { setAddingNew(false); setNewItem({ name: '', unit: '', category: 'Miscellaneous' }); }}
-                className="p-1.5 text-muted-foreground hover:bg-muted rounded shrink-0">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <button onClick={() => setAddingNew(true)}
-              className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
-              <Plus className="w-4 h-4" /> Add item
+      {/* Add item footer */}
+      <div className={`px-3 py-2 ${color.bg}`}>
+        {addingItem ? (
+          <div className="flex items-center gap-2">
+            <input value={newItem.name} onChange={e => setNewItem(p => ({ ...p, name: e.target.value }))}
+              onKeyDown={e => e.key === 'Enter' && addItem()}
+              placeholder="Item name" className="flex-1 border rounded px-2 py-1 text-sm" autoFocus />
+            <input value={newItem.unit} onChange={e => setNewItem(p => ({ ...p, unit: e.target.value }))}
+              onKeyDown={e => e.key === 'Enter' && addItem()}
+              placeholder="unit" className="w-14 border rounded px-2 py-1 text-sm" />
+            <button onClick={addItem} disabled={saving}
+              className={`px-3 py-1 rounded text-xs font-medium ${color.header} text-white disabled:opacity-50`}>
+              {saving ? '…' : 'Add'}
             </button>
-          )}
-        </div>
+            <button onClick={() => setAddingItem(false)} className="p-1 text-muted-foreground"><X className="w-3.5 h-3.5" /></button>
+          </div>
+        ) : (
+          <button onClick={() => setAddingItem(true)}
+            className={`flex items-center gap-1.5 text-xs font-medium ${color.text} hover:underline`}>
+            <Plus className="w-3.5 h-3.5" /> Add item
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () => void }) {
+  const [localItems, setLocalItems]       = useState<KitchenItem[]>(items);
+  const [extraCategories, setExtraCategories] = useState<string[]>([]);
+  const [dragItemId, setDragItemId]       = useState<string | null>(null);
+  const [addingBucket, setAddingBucket]   = useState(false);
+  const [newBucketName, setNewBucketName] = useState('');
+
+  useEffect(() => { setLocalItems(items); }, [items]);
+
+  const itemCategories = Array.from(new Set(localItems.map(i => i.category || 'Miscellaneous')));
+  const allCategories  = Array.from(new Set([...itemCategories, ...extraCategories]));
+
+  function handleDrop(dragId: string, targetId: string | null, targetCategory: string) {
+    const dragItem = localItems.find(i => i.id === dragId);
+    if (!dragItem) return;
+
+    let updated = localItems.filter(i => i.id !== dragId);
+    const moved = { ...dragItem, category: targetCategory };
+
+    if (targetId) {
+      const idx = updated.findIndex(i => i.id === targetId);
+      updated.splice(idx, 0, moved);
+    } else {
+      updated.push(moved);
+    }
+
+    setLocalItems(updated);
+    setDragItemId(null);
+
+    const promises: Promise<unknown>[] = [];
+    if (dragItem.category !== targetCategory) {
+      promises.push(fetch(`/api/daily-kitchen/items/${dragId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: targetCategory }),
+      }));
+    }
+    const affected = new Set([dragItem.category || 'Miscellaneous', targetCategory]);
+    for (const cat of affected) {
+      updated.filter(i => (i.category || 'Miscellaneous') === cat).forEach((item, i) => {
+        promises.push(fetch(`/api/daily-kitchen/items/${item.id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sort_order: (i + 1) * 10 }),
+        }));
+      });
+    }
+    Promise.all(promises).then(() => onRefresh());
+  }
+
+  function handleRenameCategory(oldCat: string, newCat: string) {
+    setLocalItems(prev => prev.map(i => (i.category || 'Miscellaneous') === oldCat ? { ...i, category: newCat } : i));
+    setExtraCategories(prev => prev.map(c => c === oldCat ? newCat : c));
+  }
+
+  function addBucket() {
+    const name = newBucketName.trim();
+    if (!name || allCategories.includes(name)) { toast.error(allCategories.includes(name) ? 'Already exists' : 'Name required'); return; }
+    setExtraCategories(prev => [...prev, name]);
+    setAddingBucket(false);
+    setNewBucketName('');
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {allCategories.map((cat, idx) => (
+          <DKBucketCard
+            key={cat}
+            category={cat}
+            items={localItems.filter(i => (i.category || 'Miscellaneous') === cat)}
+            colorIdx={idx}
+            dragItemId={dragItemId}
+            onDragStart={setDragItemId}
+            onDrop={handleDrop}
+            onRenameCategory={handleRenameCategory}
+            onRefresh={onRefresh}
+          />
+        ))}
+      </div>
+
+      {/* Add new bucket */}
+      <div className="pt-1">
+        {addingBucket ? (
+          <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/30">
+            <input value={newBucketName} onChange={e => setNewBucketName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addBucket()}
+              placeholder="Bucket name (e.g. Dairy)"
+              className="flex-1 border rounded px-3 py-1.5 text-sm" autoFocus />
+            <button onClick={addBucket} className="bg-primary text-primary-foreground px-4 py-1.5 rounded text-sm font-medium">Add</button>
+            <button onClick={() => setAddingBucket(false)} className="p-1.5 text-muted-foreground"><X className="w-4 h-4" /></button>
+          </div>
+        ) : (
+          <button onClick={() => setAddingBucket(true)}
+            className="flex items-center gap-2 border-2 border-dashed border-muted-foreground/30 text-muted-foreground hover:border-primary hover:text-primary rounded-xl px-4 py-3 w-full justify-center text-sm font-medium transition-colors">
+            <Plus className="w-4 h-4" /> Add New Bucket
+          </button>
+        )}
       </div>
     </div>
   );
