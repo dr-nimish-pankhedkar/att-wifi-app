@@ -13,8 +13,7 @@ export async function POST(request: NextRequest) {
   const supabase = createAdminClient();
   const { data: profiles, error } = await supabase
     .from('profiles')
-    .select('id, name, designation, photo_url, pin_hash, role')
-    .eq('active', true);
+    .select('id, name, designation, photo_url, pin_hash, role');
 
   if (error || !profiles) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
@@ -24,7 +23,7 @@ export async function POST(request: NextRequest) {
   const results = await Promise.all(
     profiles.map(async (p) => ({
       profile: p,
-      match: await bcrypt.compare(body.pin, p.pin_hash),
+      match: p.pin_hash ? await bcrypt.compare(body.pin, p.pin_hash) : false,
     }))
   );
   const found = results.find((r) => r.match);

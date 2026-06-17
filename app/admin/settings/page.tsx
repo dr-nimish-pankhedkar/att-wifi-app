@@ -2,7 +2,6 @@
 export const dynamic = 'force-dynamic';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import AdminNav from '@/components/admin/AdminNav';
@@ -14,6 +13,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Save, Plus, Trash2, Wifi, Loader2, Upload, ImageIcon } from 'lucide-react';
 
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
 interface Settings {
   id: string;
   company_name: string;
@@ -21,6 +26,8 @@ interface Settings {
   late_threshold_minutes: number;
   allowed_ips: string | null;
   logo_url: string | null;
+  off_days: string | null;
+  weekend_shift_id: string | null;
 }
 
 export default function SettingsPage() {
@@ -58,14 +65,16 @@ export default function SettingsPage() {
 
   async function uploadLogo(file: File) {
     if (!settings) return;
+    if (file.size > 5 * 1024 * 1024) { toast.error('Logo must be under 5 MB'); return; }
     setLogoUploading(true);
     try {
-      const ext = file.name.split('.').pop();
-      const path = `logo.${ext}`;
-      const { error } = await supabase.storage.from('logos').upload(path, file, { upsert: true });
-      if (error) { toast.error('Logo upload failed'); return; }
-      const { data } = supabase.storage.from('logos').getPublicUrl(path);
-      const logoUrl = data.publicUrl + `?t=${Date.now()}`;
+      const form = new FormData();
+      form.append('file', file);
+      const uploadRes = await fetch('/api/upload/logo', { method: 'POST', body: form });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) { toast.error(uploadData.error ?? 'Upload failed'); return; }
+
+      const logoUrl = uploadData.url + `?t=${Date.now()}`;
       const res = await fetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -114,14 +123,14 @@ export default function SettingsPage() {
   function addIp() {
     const trimmed = newIp.trim();
     if (!trimmed) return;
-    // Basic IP format validation
-    const ipv4 = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
-    if (!ipv4.test(trimmed)) {
-      toast.error('Enter a valid IPv4 address (e.g. 103.45.67.89)');
+    // Accept exact IP, wildcard prefix (106.213.*), or CIDR (106.213.0.0/16)
+    const valid = /^[\d.*]+(?:\/\d{1,2})?$/.test(trimmed);
+    if (!valid) {
+      toast.error('Use an IP (103.45.67.89), prefix (106.213.*), or CIDR (106.213.0.0/16)');
       return;
     }
     if (ipList.includes(trimmed)) {
-      toast.error('This IP is already in the list');
+      toast.error('This entry is already in the list');
       return;
     }
     setIpList([...ipList, trimmed]);
@@ -143,6 +152,8 @@ export default function SettingsPage() {
         body: JSON.stringify({
           ...settings,
           allowed_ips: ipList.join(','),
+          off_days: settings.off_days ?? '1',
+          weekend_shift_id: settings.weekend_shift_id ?? null,
         }),
       });
       const data = await res.json();
@@ -224,8 +235,10 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Only devices connecting from these public IPs can check in.
-                  Click &quot;Detect My IP&quot; from the office network to find yours.
+                  Only devices on matching IPs can check in. All staff on the same WiFi share one public IP.
+                  Supports exact IPs (<code className="text-xs bg-muted px-1 rounded">106.213.45.67</code>),
+                  wildcards (<code className="text-xs bg-muted px-1 rounded">106.213.*</code>),
+                  or CIDR (<code className="text-xs bg-muted px-1 rounded">106.213.0.0/16</code>).
                 </p>
 
                 {/* Current IP list */}
@@ -255,7 +268,7 @@ export default function SettingsPage() {
                   <Input
                     value={newIp}
                     onChange={(e) => setNewIp(e.target.value)}
-                    placeholder="e.g. 103.45.67.89"
+                    placeholder="e.g. 106.213.* or 106.213.45.67"
                     className="font-mono"
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addIp(); } }}
                   />
@@ -268,8 +281,61 @@ export default function SettingsPage() {
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Click &quot;Detect My IP&quot; while on office WiFi — it will auto-fill your current public IP.
+                  Tip: Click &quot;Detect My IP&quot; on your office WiFi to see your current IP, then add it as
+                  a wildcard (e.g. <span className="font-mono">106.213.*</span>) so it works even if the last octet changes.
                 </p>
+              </CardContent>
+            </Card>
+
+            {/* Work Week */}
+            <Card>
+              <CardHeader><CardTitle>Work Week</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label className="mb-2 block">Days Off (uncheck to mark as working days)</Label>
+                  <div className="flex flex-wrap gap-3">
+                    {DAY_NAMES.map((name, idx) => {
+                      const offList = (settings.off_days ?? '1').split(',').map((d) => parseInt(d.trim(), 10));
+                      const isOff = offList.includes(idx);
+                      return (
+                        <label key={idx} className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={isOff}
+                            onChange={(e) => {
+                              const current = (settings.off_days ?? '1').split(',').map((d) => parseInt(d.trim(), 10)).filter((d) => !isNaN(d));
+                              const next = e.target.checked
+                                ? [...new Set([...current, idx])]
+                                : current.filter((d) => d !== idx);
+                              setSettings({ ...settings, off_days: next.sort().join(',') });
+                            }}
+                            className="w-4 h-4 rounded"
+                          />
+                          <span className="text-sm">{name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">Staff cannot check in on days off, and absent is not marked on those days.</p>
+                </div>
+                <div>
+                  <Label>Weekend Shift (Sat &amp; Sun default shift for all staff)</Label>
+                  <Select
+                    value={settings.weekend_shift_id ?? 'none'}
+                    onValueChange={(v) => setSettings({ ...settings, weekend_shift_id: v === 'none' ? null : v })}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Same as weekday shift" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Same as weekday shift</SelectItem>
+                      {shifts.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name} · {s.start_time.slice(0, 5)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">Overrides individual shift assignments on Saturdays and Sundays.</p>
+                </div>
               </CardContent>
             </Card>
 
@@ -292,13 +358,8 @@ export default function SettingsPage() {
               </p>
               {settings?.logo_url && (
                 <div className="flex items-center gap-4">
-                  <Image
-                    src={settings.logo_url}
-                    alt="Company logo"
-                    width={80}
-                    height={80}
-                    className="object-contain rounded-md border bg-white p-1"
-                  />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={settings.logo_url} alt="Company logo" className="w-20 h-20 object-contain rounded-md border bg-white p-1" />
                   <Button variant="outline" size="sm" onClick={removeLogo}>
                     Remove
                   </Button>
@@ -315,7 +376,7 @@ export default function SettingsPage() {
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo(f); }}
                 />
               </label>
-              <p className="text-xs text-muted-foreground">PNG or SVG recommended, max 1 MB.</p>
+              <p className="text-xs text-muted-foreground">PNG or SVG recommended, max 5 MB.</p>
             </CardContent>
           </Card>
 

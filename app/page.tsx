@@ -30,13 +30,11 @@ export default function KioskPage() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [now, setNow] = useState(new Date());
 
-  // Live clock
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // Fetch company name + logo
   useEffect(() => {
     fetch('/api/settings')
       .then((r) => r.json())
@@ -71,16 +69,13 @@ export default function KioskPage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-900 via-blue-950 to-slate-900 flex flex-col items-center justify-between px-4 py-8 safe-area-inset">
 
-      {/* Top: logo + company + clock */}
       <div className="text-center w-full pt-4 flex flex-col items-center gap-2">
         {logoUrl && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={logoUrl}
             alt={companyName}
-            width={72}
-            height={72}
-            className="object-contain rounded-xl"
+            className="w-16 h-16 object-contain rounded-xl"
           />
         )}
         <h1 className="text-2xl font-bold text-white tracking-tight">{companyName}</h1>
@@ -90,7 +85,6 @@ export default function KioskPage() {
         <p className="text-white/50 text-sm">{formatDateIST(now)}</p>
       </div>
 
-      {/* Middle: PIN pad */}
       <div className="w-full flex flex-col items-center gap-6">
         <p className="text-white/70 text-base">Enter your PIN</p>
         <PinPad onSubmit={handlePinSubmit} loading={loading} />

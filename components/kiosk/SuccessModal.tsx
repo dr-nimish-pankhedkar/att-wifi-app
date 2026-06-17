@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Image from 'next/image';
 import { CheckCircle, Clock, LogIn, LogOut } from 'lucide-react';
 import { formatTimeIST } from '@/lib/time';
 import { cn } from '@/lib/utils';
@@ -73,8 +72,9 @@ export default function SuccessModal({ data, onClose }: { data: SuccessData; onC
         {/* Photo + Name */}
         <div className="flex items-center gap-4 bg-gray-50 rounded-2xl px-4 py-3 mb-4 text-left">
           {data.photo_url ? (
-            <Image src={data.photo_url} alt={data.name} width={52} height={52}
-              className="rounded-full object-cover flex-shrink-0" />
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={data.photo_url} alt={data.name}
+              className="w-[52px] h-[52px] rounded-full object-cover flex-shrink-0" />
           ) : (
             <div className="w-13 h-13 w-[52px] h-[52px] rounded-full bg-blue-100 flex items-center justify-center text-xl font-bold text-blue-600 flex-shrink-0">
               {data.name[0].toUpperCase()}

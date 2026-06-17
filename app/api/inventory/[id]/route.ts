@@ -25,6 +25,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   if (body.min_level !== undefined) allowed.min_level = body.min_level;
   if (body.sort_order !== undefined) allowed.sort_order = body.sort_order;
   if (body.active !== undefined) allowed.active = body.active;
+  if ('bucket_id' in body) allowed.bucket_id = body.bucket_id;
 
   const { data, error } = await supabase
     .from('inventory_items')

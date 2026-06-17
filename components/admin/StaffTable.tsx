@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
-import { Pencil, Trash2, Plus, Upload } from 'lucide-react';
+import Link from 'next/link';
+import { Pencil, Trash2, Plus, Upload, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -163,13 +163,8 @@ export default function StaffTable({ staff, shifts, onRefresh }: StaffTableProps
               <tr key={member.id} className="border-t hover:bg-muted/30 transition-colors">
                 <td className="px-4 py-3">
                   {member.photo_url ? (
-                    <Image
-                      src={member.photo_url}
-                      alt={member.name}
-                      width={36}
-                      height={36}
-                      className="rounded-full object-cover"
-                    />
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={member.photo_url} alt={member.name} className="w-9 h-9 rounded-full object-cover" />
                   ) : (
                     <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
                       {member.name[0].toUpperCase()}
@@ -192,6 +187,11 @@ export default function StaffTable({ staff, shifts, onRefresh }: StaffTableProps
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
+                    <Link href={`/admin/staff/${member.id}`}>
+                      <Button size="icon" variant="ghost" title="View details">
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    </Link>
                     <Button size="icon" variant="ghost" onClick={() => openEdit(member)}>
                       <Pencil className="w-4 h-4" />
                     </Button>
@@ -276,9 +276,8 @@ export default function StaffTable({ staff, shifts, onRefresh }: StaffTableProps
                     }}
                   />
                 </label>
-                {form.photo_url && (
-                  <Image src={form.photo_url} alt="Preview" width={36} height={36} className="rounded-full object-cover" />
-                )}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {form.photo_url && <img src={form.photo_url} alt="Preview" className="w-9 h-9 rounded-full object-cover" />}
               </div>
             </div>
           </div>

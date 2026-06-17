@@ -44,6 +44,8 @@ export async function PUT(request: NextRequest) {
     updates.late_threshold_minutes = Number(body.late_threshold_minutes);
   if (body.allowed_ips !== undefined) updates.allowed_ips = body.allowed_ips;
   if (body.logo_url !== undefined) updates.logo_url = body.logo_url;
+  if (body.off_days !== undefined) updates.off_days = body.off_days;
+  if (body.weekend_shift_id !== undefined) updates.weekend_shift_id = body.weekend_shift_id || null;
 
   let result;
   if (existing) {
