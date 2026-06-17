@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import AdminNav from '@/components/admin/AdminNav';
-import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X, GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -52,11 +52,16 @@ function CategoryInput({ value, onChange, categories }: { value: string; onChang
 
 function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () => void }) {
   const categories = Array.from(new Set([...DEFAULT_CATEGORIES, ...items.map(i => i.category).filter(Boolean)]));
+  const [localItems, setLocalItems] = useState<KitchenItem[]>(items);
   const [editingId, setEditingId]   = useState<string | null>(null);
   const [editForm, setEditForm]     = useState({ name: '', unit: '', category: 'Miscellaneous' });
   const [addingNew, setAddingNew]   = useState(false);
   const [newItem, setNewItem]       = useState({ name: '', unit: '', category: 'Miscellaneous' });
   const [saving, setSaving]         = useState(false);
+  const [dragIndex, setDragIndex]   = useState<number | null>(null);
+  const [overIndex, setOverIndex]   = useState<number | null>(null);
+
+  useEffect(() => { setLocalItems(items); }, [items]);
 
   async function saveEdit(id: string) {
     if (!editForm.name.trim()) { toast.error('Name required'); return; }
@@ -96,15 +101,58 @@ function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () =
     onRefresh();
   }
 
+  function handleDragStart(e: React.DragEvent, idx: number) {
+    setDragIndex(idx);
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function handleDragOver(e: React.DragEvent, idx: number) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setOverIndex(idx);
+  }
+
+  function handleDrop(e: React.DragEvent, idx: number) {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === idx) { setDragIndex(null); setOverIndex(null); return; }
+    const reordered = [...localItems];
+    const [moved] = reordered.splice(dragIndex, 1);
+    reordered.splice(idx, 0, moved);
+    setLocalItems(reordered);
+    setDragIndex(null);
+    setOverIndex(null);
+    Promise.all(
+      reordered.map((item, i) =>
+        fetch(`/api/daily-kitchen/items/${item.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sort_order: (i + 1) * 10 }),
+        })
+      )
+    ).then(() => onRefresh());
+  }
+
   return (
     <div className="rounded-xl border overflow-hidden">
       <div className="bg-muted/50 px-4 py-2.5 text-xs font-medium text-muted-foreground flex justify-between">
-        <span>Item ({items.length})</span>
+        <span>Item ({localItems.length})</span>
         <span className="hidden sm:inline">Unit</span>
       </div>
       <div className="divide-y divide-border">
-        {items.map(item => (
-          <div key={item.id} className="px-4 py-2">
+        {localItems.map((item, idx) => (
+          <div
+            key={item.id}
+            draggable={editingId !== item.id}
+            onDragStart={e => handleDragStart(e, idx)}
+            onDragOver={e => handleDragOver(e, idx)}
+            onDrop={e => handleDrop(e, idx)}
+            onDragEnd={() => { setDragIndex(null); setOverIndex(null); }}
+            className={cn(
+              'px-4 py-2 transition-colors',
+              dragIndex === idx && 'opacity-40',
+              overIndex === idx && dragIndex !== idx && 'bg-primary/5 border-t-2 border-primary'
+            )}
+          >
             {editingId === item.id ? (
               <div className="flex items-center gap-2">
                 <input
@@ -138,6 +186,7 @@ function ManageTab({ items, onRefresh }: { items: KitchenItem[]; onRefresh: () =
               </div>
             ) : (
               <div className="flex items-center gap-2">
+                <GripVertical className="w-4 h-4 text-muted-foreground/40 cursor-grab active:cursor-grabbing shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{item.name}</p>
                   <p className="text-xs text-muted-foreground">{item.category || '—'} · {item.unit || '—'}</p>
