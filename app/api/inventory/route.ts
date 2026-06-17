@@ -38,7 +38,7 @@ export async function GET() {
           quantity: log.quantity,
           log_date: log.log_date,
           notes: log.notes,
-          logged_by_name: (log.profiles as { name: string } | null)?.name ?? null,
+          logged_by_name: (log.profiles as unknown as { name: string } | null)?.name ?? null,
           created_at: log.created_at ?? null,
         };
       }
