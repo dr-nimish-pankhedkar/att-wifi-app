@@ -1,18 +1,25 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import AdminNav from '@/components/admin/AdminNav';
-import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X, GripVertical } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X, GripVertical, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 interface KitchenItem { id: string; name: string; unit: string; category: string; sort_order: number; }
+interface LogEntry    { item_id: string; shift: 'in' | 'closing'; quantity: number; }
+interface EntryRecord { item_id: string; shift: 'in' | 'closing'; quantity: number; created_at: string; logged_by_name: string | null; }
 
 const DEFAULT_CATEGORIES = ['Vegetables', 'Grocery', 'Miscellaneous'];
-interface LogEntry    { item_id: string; shift: 'in' | 'closing'; quantity: number; }
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-IN', {
+    hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata',
+  });
+}
 
 type Tab = 'view' | 'manage';
 
@@ -332,7 +339,9 @@ export default function DailyKitchenAdminPage() {
   const [items, setItems]          = useState<KitchenItem[]>([]);
   const [logs, setLogs]            = useState<LogEntry[]>([]);
   const [prevLogs, setPrevLogs]    = useState<LogEntry[]>([]);
+  const [entries, setEntries]      = useState<EntryRecord[]>([]);
   const [loading, setLoading]      = useState(true);
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -348,12 +357,14 @@ export default function DailyKitchenAdminPage() {
       fetch(`/api/daily-kitchen/log?date=${d}`),
       fetch(`/api/daily-kitchen/log?date=${prev}`),
     ]);
-    const { items: iData } = await iRes.json();
-    const { logs: lData }  = await lRes.json();
-    const { logs: pData }  = await pRes.json();
+    const { items: iData }           = await iRes.json();
+    const { logs: lData, entries: eData } = await lRes.json();
+    const { logs: pData }            = await pRes.json();
     setItems(iData ?? []);
     setLogs(lData ?? []);
+    setEntries(eData ?? []);
     setPrevLogs(pData ?? []);
+    setExpandedItems(new Set());
     setLoading(false);
   }, []);
 
@@ -376,6 +387,20 @@ export default function DailyKitchenAdminPage() {
     if (todayClose === undefined) return undefined;
     return (yestClose ?? 0) + (todayIn ?? 0) - todayClose;
   };
+
+  const entriesByItem: Record<string, EntryRecord[]> = {};
+  for (const e of entries) {
+    if (!entriesByItem[e.item_id]) entriesByItem[e.item_id] = [];
+    entriesByItem[e.item_id].push(e);
+  }
+
+  function toggleHistory(itemId: string) {
+    setExpandedItems(prev => {
+      const next = new Set(prev);
+      next.has(itemId) ? next.delete(itemId) : next.add(itemId);
+      return next;
+    });
+  }
 
   const inCount      = logs.filter(l => l.shift === 'in').length;
   const closingCount = logs.filter(l => l.shift === 'closing').length;
@@ -476,34 +501,86 @@ export default function DailyKitchenAdminPage() {
                               <th className="text-center px-4 py-2 font-medium w-24">🌅 IN</th>
                               <th className="text-center px-4 py-2 font-medium w-24">🌙 Closing</th>
                               <th className="text-center px-4 py-2 font-medium w-28">📊 Consumed</th>
+                              <th className="text-center px-3 py-2 font-medium w-16">Log</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border">
                             {catItems.map(item => {
                               const row  = logMap[item.id] ?? {};
                               const cons = getConsumption(item.id);
+                              const itemEntries = entriesByItem[item.id] ?? [];
+                              const isExpanded = expandedItems.has(item.id);
                               return (
-                                <tr key={item.id} className="hover:bg-muted/30 transition-colors">
-                                  <td className="px-4 py-2.5 font-medium">{item.name}</td>
-                                  <td className="px-3 py-2.5 text-center text-muted-foreground text-xs">{item.unit}</td>
-                                  <td className="px-4 py-2.5 text-center">
-                                    {row.in !== undefined
-                                      ? <span className="inline-block px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 font-semibold text-sm">{row.in}</span>
-                                      : <span className="text-muted-foreground/40">—</span>}
-                                  </td>
-                                  <td className="px-4 py-2.5 text-center">
-                                    {row.closing !== undefined
-                                      ? <span className="inline-block px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 dark:bg-indigo-500/15 dark:text-indigo-300 font-semibold text-sm">{row.closing}</span>
-                                      : <span className="text-muted-foreground/40">—</span>}
-                                  </td>
-                                  <td className="px-4 py-2.5 text-center">
-                                    {cons === undefined
-                                      ? <span className="text-muted-foreground/40">—</span>
-                                      : cons <= 0
-                                        ? <span className="text-muted-foreground text-sm">{cons}</span>
-                                        : <span className="inline-block px-2 py-0.5 rounded-md bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300 font-semibold text-sm">{cons}</span>}
-                                  </td>
-                                </tr>
+                                <React.Fragment key={item.id}>
+                                  <tr className="hover:bg-muted/30 transition-colors">
+                                    <td className="px-4 py-2.5 font-medium">{item.name}</td>
+                                    <td className="px-3 py-2.5 text-center text-muted-foreground text-xs">{item.unit}</td>
+                                    <td className="px-4 py-2.5 text-center">
+                                      {row.in !== undefined
+                                        ? <span className="inline-block px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 font-semibold text-sm">{row.in}</span>
+                                        : <span className="text-muted-foreground/40">—</span>}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-center">
+                                      {row.closing !== undefined
+                                        ? <span className="inline-block px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 dark:bg-indigo-500/15 dark:text-indigo-300 font-semibold text-sm">{row.closing}</span>
+                                        : <span className="text-muted-foreground/40">—</span>}
+                                    </td>
+                                    <td className="px-4 py-2.5 text-center">
+                                      {cons === undefined
+                                        ? <span className="text-muted-foreground/40">—</span>
+                                        : cons <= 0
+                                          ? <span className="text-muted-foreground text-sm">{cons}</span>
+                                          : <span className="inline-block px-2 py-0.5 rounded-md bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300 font-semibold text-sm">{cons}</span>}
+                                    </td>
+                                    <td className="px-3 py-2.5 text-center">
+                                      {itemEntries.length > 0 ? (
+                                        <button
+                                          onClick={() => toggleHistory(item.id)}
+                                          className={cn(
+                                            'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium transition-colors',
+                                            isExpanded
+                                              ? 'bg-primary/10 text-primary'
+                                              : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                                          )}>
+                                          <Clock className="w-3 h-3" />
+                                          {itemEntries.length}
+                                        </button>
+                                      ) : (
+                                        <span className="text-muted-foreground/30 text-xs">—</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                  {isExpanded && (
+                                    <tr key={`${item.id}-history`} className="bg-muted/20">
+                                      <td colSpan={6} className="px-4 py-2">
+                                        <div className="flex flex-col gap-1.5">
+                                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Activity Log</p>
+                                          {itemEntries.map((entry, idx) => (
+                                            <div key={idx} className="flex items-center gap-2 text-xs">
+                                              <span className={cn(
+                                                'shrink-0 px-1.5 py-0.5 rounded font-medium',
+                                                entry.shift === 'in'
+                                                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+                                                  : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300'
+                                              )}>
+                                                {entry.shift === 'in' ? '🌅 IN' : '🌙 Closing'}
+                                              </span>
+                                              <span className="font-semibold tabular-nums">{entry.quantity} {item.unit}</span>
+                                              <span className="text-muted-foreground">·</span>
+                                              <span className="text-muted-foreground">{fmtTime(entry.created_at)}</span>
+                                              {entry.logged_by_name && (
+                                                <>
+                                                  <span className="text-muted-foreground">·</span>
+                                                  <span className="text-muted-foreground">{entry.logged_by_name}</span>
+                                                </>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
                               );
                             })}
                           </tbody>

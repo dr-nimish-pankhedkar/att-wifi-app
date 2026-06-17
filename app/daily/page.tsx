@@ -87,7 +87,8 @@ export default function DailyKitchenPage() {
       .finally(() => setLoadingItems(false));
   }, [staff]);
 
-  // Load already-logged quantities for this shift+date (IN only — Closing is always a fresh entry)
+  // Load already-logged quantities for this shift+date.
+  // For Closing, pre-fill the form inputs so staff just adjusts from last value.
   useEffect(() => {
     if (!staff) return;
     fetch(`/api/daily-kitchen/log?date=${logDate}`)
@@ -98,6 +99,17 @@ export default function DailyKitchenPage() {
           if (l.shift === shift) map[l.item_id] = l.quantity;
         }
         setExistingLogs(map);
+        if (shift === 'closing') {
+          setQuantities(prev => {
+            const next = { ...prev };
+            for (const [itemId, qty] of Object.entries(map)) {
+              if (next[itemId] === undefined || next[itemId] === '') {
+                next[itemId] = String(qty);
+              }
+            }
+            return next;
+          });
+        }
       });
   }, [staff, shift, logDate]);
 
@@ -113,9 +125,22 @@ export default function DailyKitchenPage() {
     setStaff(await res.json());
   }, []);
 
+  function adjustQty(itemId: string, delta: number) {
+    setQuantities(prev => {
+      const current = prev[itemId] !== undefined && prev[itemId] !== '' ? Number(prev[itemId]) : (existingLogs[itemId] ?? 0);
+      const next = Math.max(0, current + delta);
+      return { ...prev, [itemId]: String(next) };
+    });
+  }
+
   async function handleSubmit() {
     const entries = items
-      .filter(i => quantities[i.id] !== '' && quantities[i.id] !== undefined && Number(quantities[i.id]) > 0)
+      .filter(i => {
+        const v = quantities[i.id];
+        if (v === undefined || v === '') return false;
+        // Closing allows 0 (stock fully consumed); IN requires > 0
+        return shift === 'closing' ? true : Number(v) > 0;
+      })
       .map(i => ({ item_id: i.id, quantity: Number(quantities[i.id]) }));
     if (entries.length === 0) { toast.error('Fill at least one quantity'); return; }
     setSaving(true);
@@ -129,7 +154,11 @@ export default function DailyKitchenPage() {
     setSaved(true);
   }
 
-  const filled = items.filter(i => quantities[i.id] !== '' && quantities[i.id] !== undefined).length;
+  const filled = items.filter(i => {
+    const v = quantities[i.id];
+    if (v === undefined || v === '') return false;
+    return shift === 'closing' ? true : Number(v) > 0;
+  }).length;
 
   // Group items by category
   const categories = Array.from(new Set(items.map(i => i.category || 'Miscellaneous')));
@@ -263,8 +292,12 @@ export default function DailyKitchenPage() {
                   const val      = quantities[item.id] ?? '';
                   const hasVal   = val !== '';
                   const existing = existingLogs[item.id];
+                  const numVal   = val !== '' ? Number(val) : undefined;
                   return (
-                    <div key={item.id} className="px-4 py-2.5 bg-white/5">
+                    <div key={item.id} className={cn(
+                      'px-4 py-3 bg-white/5 transition-colors',
+                      hasVal && shift === 'closing' && 'bg-indigo-500/10'
+                    )}>
                       <div className="flex items-center gap-3">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-white font-medium">{item.name}</p>
@@ -273,28 +306,60 @@ export default function DailyKitchenPage() {
                               ✓ logged today: {existing} {item.unit}
                             </p>
                           )}
+                          {shift === 'closing' && existing !== undefined && !hasVal && (
+                            <p className="text-xs mt-0.5 text-indigo-300/60">
+                              prev: {existing} {item.unit}
+                            </p>
+                          )}
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            min={0}
-                            step="any"
-                            value={val}
-                            onChange={e => setQuantities(p => ({ ...p, [item.id]: e.target.value }))}
-                            placeholder="—"
-                            className={cn(
-                              'w-20 text-right rounded-xl px-3 py-1.5 text-sm font-medium outline-none',
-                              'bg-white/10 border text-white placeholder-white/30',
-                              hasVal
-                                ? shift === 'in'
-                                  ? 'border-amber-400 bg-amber-500/20'
-                                  : 'border-indigo-400 bg-indigo-500/20'
-                                : 'border-white/20'
-                            )}
-                          />
-                          {item.unit && <span className="text-xs text-white/40 w-8">{item.unit}</span>}
-                        </div>
+                        {shift === 'closing' ? (
+                          /* +/- stepper for Closing */
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => adjustQty(item.id, -1)}
+                              disabled={numVal !== undefined && numVal <= 0}
+                              className="w-9 h-9 rounded-xl bg-white/10 border border-white/20 text-white text-lg font-bold flex items-center justify-center active:scale-95 transition-all disabled:opacity-30"
+                            >−</button>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min={0}
+                              step="any"
+                              value={val}
+                              onChange={e => setQuantities(p => ({ ...p, [item.id]: e.target.value }))}
+                              placeholder="—"
+                              className={cn(
+                                'w-16 text-center rounded-xl px-2 py-1.5 text-sm font-bold outline-none',
+                                'bg-white/10 border text-white placeholder-white/30',
+                                hasVal ? 'border-indigo-400 bg-indigo-500/20' : 'border-white/20'
+                              )}
+                            />
+                            <button
+                              onClick={() => adjustQty(item.id, +1)}
+                              className="w-9 h-9 rounded-xl bg-white/10 border border-white/20 text-white text-lg font-bold flex items-center justify-center active:scale-95 transition-all"
+                            >+</button>
+                            {item.unit && <span className="text-xs text-white/40 w-6 text-right">{item.unit}</span>}
+                          </div>
+                        ) : (
+                          /* plain input for IN */
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min={0}
+                              step="any"
+                              value={val}
+                              onChange={e => setQuantities(p => ({ ...p, [item.id]: e.target.value }))}
+                              placeholder="—"
+                              className={cn(
+                                'w-20 text-right rounded-xl px-3 py-1.5 text-sm font-medium outline-none',
+                                'bg-white/10 border text-white placeholder-white/30',
+                                hasVal ? 'border-amber-400 bg-amber-500/20' : 'border-white/20'
+                              )}
+                            />
+                            {item.unit && <span className="text-xs text-white/40 w-8">{item.unit}</span>}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
