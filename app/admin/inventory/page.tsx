@@ -4,8 +4,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import {
   ShoppingCart, ClipboardList, Package, Settings2, Plus, Trash2, Pencil,
-  Check, X, ChevronDown, ChevronUp, MoveRight,
+  Check, X, ChevronDown, ChevronUp, MoveRight, GripVertical,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 /* ── Types ──────────────────────────────────────────────── */
 
@@ -24,7 +25,7 @@ interface InventoryItem {
   min_level: number;
   sort_order: number;
   active: boolean;
-  latest: { quantity: number; log_date: string; notes: string | null } | null;
+  latest: { quantity: number; log_date: string; notes: string | null; logged_by_name: string | null; created_at: string | null } | null;
 }
 
 type Tab = 'stock' | 'log' | 'shopping' | 'manage';
@@ -107,6 +108,31 @@ function BucketCard({
   const [editingUnit, setEditingUnit] = useState<string | null>(null);
   const [unitDraft, setUnitDraft] = useState('');
   const [saving, setSaving] = useState(false);
+  const [localItems, setLocalItems] = useState(items);
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [overKey, setOverKey] = useState<string | null>(null);
+
+  useEffect(() => { setLocalItems(items); }, [items]);
+
+  function handleItemDrop(dragId: string, overId: string) {
+    if (dragId === overId) return;
+    const reordered = [...localItems];
+    const from = reordered.findIndex(i => i.id === dragId);
+    const to   = reordered.findIndex(i => i.id === overId);
+    if (from === -1 || to === -1) return;
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved);
+    setLocalItems(reordered);
+    Promise.all(
+      reordered.map((item, i) =>
+        fetch(`/api/inventory/${item.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sort_order: (i + 1) * 10 }),
+        })
+      )
+    ).then(() => onRefresh());
+  }
 
   async function saveUnit(itemId: string, unit: string) {
     const res = await fetch(`/api/inventory/${itemId}`, {
@@ -121,8 +147,8 @@ function BucketCard({
 
   const color = bucketColor(colorIdx);
 
-  const criticalCount = items.filter(i => stockStatus(i) === 'critical').length;
-  const lowCount = items.filter(i => stockStatus(i) === 'low').length;
+  const criticalCount = localItems.filter(i => stockStatus(i) === 'critical').length;
+  const lowCount = localItems.filter(i => stockStatus(i) === 'low').length;
 
   async function saveBucketName() {
     if (!bucketName.trim()) return;
@@ -266,7 +292,7 @@ function BucketCard({
           )}
 
           <div className="divide-y">
-            {items.map((item) => {
+            {localItems.map((item) => {
               const st = stockStatus(item);
               const rowBg =
                 st === 'critical' ? 'bg-red-50' :
@@ -307,7 +333,19 @@ function BucketCard({
                 }
 
                 return (
-                  <div key={item.id} className="px-3 py-2 flex items-center gap-2">
+                  <div
+                    key={item.id}
+                    draggable={movingItem !== item.id}
+                    onDragStart={e => { setDragKey(item.id); e.dataTransfer.effectAllowed = 'move'; }}
+                    onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setOverKey(item.id); }}
+                    onDrop={e => { e.preventDefault(); if (dragKey) handleItemDrop(dragKey, item.id); setDragKey(null); setOverKey(null); }}
+                    onDragEnd={() => { setDragKey(null); setOverKey(null); }}
+                    className={cn(
+                      'px-3 py-2 flex items-center gap-2 transition-colors',
+                      dragKey === item.id && 'opacity-40',
+                      overKey === item.id && dragKey !== item.id && 'bg-primary/5 border-t-2 border-primary'
+                    )}
+                  >
                     {movingItem === item.id ? (
                       <div className="flex items-center gap-2 flex-1 flex-wrap">
                         <span className="text-sm font-medium text-muted-foreground flex-1">{item.name}</span>
@@ -330,6 +368,7 @@ function BucketCard({
                       </div>
                     ) : (
                       <>
+                        <GripVertical className="w-4 h-4 text-muted-foreground/30 cursor-grab active:cursor-grabbing shrink-0" />
                         <span className="flex-1 text-sm font-medium">{item.name}</span>
                         {/* Inline unit editor */}
                         {editingUnit === item.id ? (
@@ -429,11 +468,21 @@ function BucketCard({
                   </div>
                   <div className="flex items-center gap-3">
                     <StockBadge item={item} />
-                    {item.latest && (
-                      <span className="text-xs text-muted-foreground hidden sm:block">
-                        {new Date(item.latest.log_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                      </span>
-                    )}
+                    {item.latest ? (
+                      <div className="text-right hidden sm:block">
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(item.latest.log_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                          {item.latest.created_at && (
+                            <span className="ml-1">
+                              {new Date(item.latest.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            </span>
+                          )}
+                        </p>
+                        {item.latest.logged_by_name && (
+                          <p className="text-xs text-muted-foreground/60">{item.latest.logged_by_name}</p>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               );

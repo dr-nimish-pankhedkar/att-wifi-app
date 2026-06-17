@@ -22,12 +22,12 @@ export async function GET() {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const itemIds = (items ?? []).map((i) => i.id);
-  const latestLogs: Record<string, { quantity: number; log_date: string; notes: string | null }> = {};
+  const latestLogs: Record<string, { quantity: number; log_date: string; notes: string | null; logged_by_name: string | null; created_at: string | null }> = {};
 
   if (itemIds.length > 0) {
     const { data: logs } = await supabase
       .from('inventory_logs')
-      .select('item_id, quantity, log_date, notes')
+      .select('item_id, quantity, log_date, notes, created_at, profiles!logged_by(name)')
       .in('item_id', itemIds)
       .order('log_date', { ascending: false })
       .order('created_at', { ascending: false });
@@ -38,6 +38,8 @@ export async function GET() {
           quantity: log.quantity,
           log_date: log.log_date,
           notes: log.notes,
+          logged_by_name: (log.profiles as { name: string } | null)?.name ?? null,
+          created_at: log.created_at ?? null,
         };
       }
     }
