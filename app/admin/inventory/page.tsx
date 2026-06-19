@@ -75,6 +75,147 @@ function StockBadge({ item }: { item: InventoryItem }) {
 }
 
 /* ══════════════════════════════════════════════════════════
+   SHOPPING VENDOR CARD
+══════════════════════════════════════════════════════════ */
+
+function ShoppingCard({
+  vendor, items, colorIdx, dragItemId, onDragStart, onDrop,
+}: {
+  vendor: string;
+  items: InventoryItem[];
+  colorIdx: number;
+  dragItemId: string | null;
+  onDragStart: (id: string) => void;
+  onDrop: (dragId: string, targetVendor: string) => void;
+}) {
+  const color = bucketColor(colorIdx);
+  const [isOver, setIsOver] = useState(false);
+
+  return (
+    <div
+      className={cn(
+        `rounded-xl border-2 ${color.border} overflow-hidden shadow-sm transition-all`,
+        isOver && 'ring-2 ring-offset-1 scale-[1.01]'
+      )}
+      onDragOver={e => { e.preventDefault(); setIsOver(true); }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsOver(false); }}
+      onDrop={e => { e.preventDefault(); setIsOver(false); if (dragItemId) onDrop(dragItemId, vendor); }}
+    >
+      {/* Header */}
+      <div className={`${color.header} text-white px-4 py-2.5 flex items-center justify-between`}>
+        <span className="font-semibold text-sm">
+          {vendor === 'No Vendor' ? '—' : '🏪'} {vendor}
+        </span>
+        <span className="text-white/60 text-xs">{items.length} item{items.length !== 1 ? 's' : ''}</span>
+      </div>
+      {/* Items */}
+      <div className={cn('divide-y divide-border', color.bg, 'dark:bg-transparent')}>
+        {items.length === 0 ? (
+          <div className="px-4 py-6 text-center text-muted-foreground/50 text-xs">Drop items here</div>
+        ) : items.map(item => {
+          const qty  = item.latest?.quantity ?? null;
+          const diff = qty !== null ? item.min_level - qty : null;
+          return (
+            <div
+              key={item.id}
+              draggable
+              onDragStart={e => { e.stopPropagation(); onDragStart(item.id); }}
+              onDragEnd={() => onDragStart('')}
+              className="flex items-center gap-2 px-3 py-2.5 cursor-grab active:cursor-grabbing hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            >
+              <GripVertical className="w-4 h-4 text-muted-foreground/40 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium">{item.name}</p>
+                {item.vendor_2 && (
+                  <p className="text-xs text-muted-foreground">alt: {item.vendor_2}</p>
+                )}
+              </div>
+              <div className="text-right text-sm shrink-0 ml-2">
+                {qty !== null ? (
+                  <>
+                    <span className="text-red-600 font-medium">{qty} {item.unit}</span>
+                    {diff !== null && diff > 0 && (
+                      <span className="ml-1.5 text-xs text-red-700 font-semibold">need +{diff}</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-amber-600 italic text-xs">never logged</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ShoppingTabContent({ items, onRefresh }: { items: InventoryItem[]; onRefresh: () => void }) {
+  const needed = items.filter(i => stockStatus(i) === 'critical' || (stockStatus(i) === 'none' && i.min_level > 0));
+  const [localItems, setLocalItems] = useState<InventoryItem[]>(needed);
+  const [dragItemId, setDragItemId] = useState('');
+
+  useEffect(() => { setLocalItems(needed); }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const vendorMap: Record<string, InventoryItem[]> = {};
+  for (const item of localItems) {
+    const v = item.vendor_1?.trim() || 'No Vendor';
+    if (!vendorMap[v]) vendorMap[v] = [];
+    vendorMap[v].push(item);
+  }
+  const vendors = Object.keys(vendorMap).sort((a, b) =>
+    a === 'No Vendor' ? 1 : b === 'No Vendor' ? -1 : a.localeCompare(b)
+  );
+
+  async function handleDrop(dragId: string, targetVendor: string) {
+    const dragItem = localItems.find(i => i.id === dragId);
+    if (!dragItem) return;
+    const currentVendor = dragItem.vendor_1?.trim() || 'No Vendor';
+    if (currentVendor === targetVendor) return;
+
+    const newVendor1 = targetVendor === 'No Vendor' ? '' : targetVendor;
+    setLocalItems(prev => prev.map(i => i.id === dragId ? { ...i, vendor_1: newVendor1 } : i));
+
+    const res = await fetch(`/api/inventory/${dragId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vendor_1: newVendor1 }),
+    });
+    if (!res.ok) toast.error('Failed to update vendor');
+    else onRefresh();
+  }
+
+  if (needed.length === 0) return (
+    <div className="text-center py-16 text-muted-foreground">
+      <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-30" />
+      <p className="font-medium">All stocked up!</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        {needed.length} item{needed.length !== 1 ? 's' : ''} to restock
+        {vendors.filter(v => v !== 'No Vendor').length > 0 && ` · ${vendors.filter(v => v !== 'No Vendor').length} vendor${vendors.filter(v => v !== 'No Vendor').length !== 1 ? 's' : ''}`}
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {vendors.map((vendor, vi) => (
+          <ShoppingCard
+            key={vendor}
+            vendor={vendor}
+            items={vendorMap[vendor]}
+            colorIdx={vi}
+            dragItemId={dragItemId}
+            onDragStart={setDragItemId}
+            onDrop={handleDrop}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════
    BUCKET CARD
 ══════════════════════════════════════════════════════════ */
 
@@ -777,73 +918,8 @@ export default function InventoryPage() {
             </div>
           )}
 
-          {/* ── Shopping tab: vendor-wise list ── */}
-          {tab === 'shopping' && (() => {
-            const needed = items.filter(i =>
-              stockStatus(i) === 'critical' || (stockStatus(i) === 'none' && i.min_level > 0)
-            );
-            if (needed.length === 0) return (
-              <div className="text-center py-16 text-muted-foreground">
-                <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p className="font-medium">All stocked up!</p>
-              </div>
-            );
-            // Group by vendor_1; fallback to "No Vendor"
-            const vendorMap: Record<string, InventoryItem[]> = {};
-            for (const item of needed) {
-              const v = item.vendor_1?.trim() || 'No Vendor';
-              if (!vendorMap[v]) vendorMap[v] = [];
-              vendorMap[v].push(item);
-            }
-            // Sort: named vendors first, "No Vendor" last
-            const vendors = Object.keys(vendorMap).sort((a, b) =>
-              a === 'No Vendor' ? 1 : b === 'No Vendor' ? -1 : a.localeCompare(b)
-            );
-            return (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">{needed.length} item{needed.length !== 1 ? 's' : ''} to restock · {vendors.filter(v => v !== 'No Vendor').length} vendor{vendors.filter(v => v !== 'No Vendor').length !== 1 ? 's' : ''}</p>
-                {vendors.map((vendor, vi) => (
-                  <div key={vendor}>
-                    <h3 className="font-semibold text-sm uppercase tracking-wide mb-2 flex items-center gap-2">
-                      <span className={vi === vendors.length - 1 && vendor === 'No Vendor' ? 'text-muted-foreground' : 'text-foreground'}>
-                        🏪 {vendor}
-                      </span>
-                      <span className="text-xs font-normal text-muted-foreground">{vendorMap[vendor].length} items</span>
-                    </h3>
-                    <div className="rounded-xl border overflow-hidden divide-y">
-                      {vendorMap[vendor].map(item => {
-                        const qty = item.latest?.quantity ?? null;
-                        const diff = qty !== null ? item.min_level - qty : null;
-                        return (
-                          <div key={item.id} className="flex items-center justify-between px-4 py-2.5 bg-red-50">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium">{item.name}</p>
-                              {item.vendor_2 && (
-                                <p className="text-xs text-muted-foreground">alt: {item.vendor_2}</p>
-                              )}
-                            </div>
-                            <div className="text-right text-sm shrink-0 ml-4">
-                              {qty !== null ? (
-                                <>
-                                  <span className="text-red-600 font-medium">{qty} {item.unit}</span>
-                                  <span className="text-muted-foreground ml-1 text-xs">/ min {item.min_level}</span>
-                                  {diff !== null && diff > 0 && (
-                                    <span className="ml-2 text-xs text-red-700 font-semibold">need +{diff}</span>
-                                  )}
-                                </>
-                              ) : (
-                                <span className="text-amber-600 italic text-xs">never logged</span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
+          {/* ── Shopping tab: vendor-wise bucket cards with drag-and-drop ── */}
+          {tab === 'shopping' && <ShoppingTabContent items={items} onRefresh={load} />}
 
           {/* ── Non-shopping tabs: bucket grid ── */}
           {tab !== 'shopping' && <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
