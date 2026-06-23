@@ -163,6 +163,7 @@ export default function DashboardPage() {
       fetch('/api/settings').then((r) => r.json()),
     ]);
     setStaff(staffRes.staff ?? []);
+    if (monthRes.error) toast.error(`Attendance load failed: ${monthRes.error}`);
     setMonthRecords(monthRes.records ?? []);
     setHolidays(holidaysRes.holidays ?? []);
     setSettings(settingsRes.settings ?? { off_days: '1' });
