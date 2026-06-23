@@ -291,8 +291,8 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-2">
               {!monthLoading && (
-                <span className="text-xs text-muted-foreground border rounded px-2 py-1">
-                  {monthRecords.length} records loaded
+                <span className={`text-xs border rounded px-2 py-1 ${monthRecords.length === 0 ? 'border-red-300 text-red-600 bg-red-50' : 'border-green-300 text-green-700 bg-green-50'}`}>
+                  {monthRecords.length === 0 ? `⚠ 0 records (queried ${monthStr})` : `✓ ${monthRecords.length} records`}
                 </span>
               )}
               <Button variant="outline" size="sm" onClick={() => setShowHolidays(!showHolidays)}>
