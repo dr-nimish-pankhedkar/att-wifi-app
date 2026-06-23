@@ -632,24 +632,22 @@ function BucketCard({
                     {item.min_level > 0 && (
                       <span className="ml-2 text-xs text-muted-foreground">min {item.min_level} {item.unit}</span>
                     )}
+                    {item.latest && (
+                      <p className="text-xs text-muted-foreground/60 mt-0.5">
+                        {new Date(item.latest.log_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        {item.latest.created_at && (
+                          <span className="ml-1">
+                            {new Date(item.latest.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })}
+                          </span>
+                        )}
+                        {item.latest.logged_by_name && (
+                          <span className="ml-1">· {item.latest.logged_by_name}</span>
+                        )}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-3">
                     <StockBadge item={item} />
-                    {item.latest ? (
-                      <div className="text-right hidden sm:block">
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(item.latest.log_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                          {item.latest.created_at && (
-                            <span className="ml-1">
-                              {new Date(item.latest.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                            </span>
-                          )}
-                        </p>
-                        {item.latest.logged_by_name && (
-                          <p className="text-xs text-muted-foreground/60">{item.latest.logged_by_name}</p>
-                        )}
-                      </div>
-                    ) : null}
                   </div>
                 </div>
               );
