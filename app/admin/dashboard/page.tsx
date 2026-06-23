@@ -289,9 +289,16 @@ export default function DashboardPage() {
               </span>
               <Button variant="outline" size="icon" onClick={nextMonth}><ChevronRight className="w-4 h-4" /></Button>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setShowHolidays(!showHolidays)}>
-              {showHolidays ? 'Hide Holidays' : '+ Holidays'}
-            </Button>
+            <div className="flex items-center gap-2">
+              {!monthLoading && (
+                <span className="text-xs text-muted-foreground border rounded px-2 py-1">
+                  {monthRecords.length} records loaded
+                </span>
+              )}
+              <Button variant="outline" size="sm" onClick={() => setShowHolidays(!showHolidays)}>
+                {showHolidays ? 'Hide Holidays' : '+ Holidays'}
+              </Button>
+            </div>
           </div>
 
           {/* Holiday manager */}
