@@ -394,7 +394,11 @@ function BucketCard({
       }),
     });
     setSaving(false);
-    if (!res.ok) { toast.error('Save failed'); return; }
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      toast.error(errData.error ?? `Save failed (${res.status})`);
+      return;
+    }
     setEditingItem(null);
     onRefresh();
   }
