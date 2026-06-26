@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   ShoppingCart, ClipboardList, Package, Settings2, Plus, Trash2, Pencil,
   Check, X, ChevronDown, ChevronUp, MoveRight, GripVertical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { authFetch } from '@/lib/supabase/authFetch';
 
 /* ── Types ──────────────────────────────────────────────── */
 
@@ -79,7 +80,7 @@ function StockBadge({ item }: { item: InventoryItem }) {
 ══════════════════════════════════════════════════════════ */
 
 function ShoppingCard({
-  vendor, items, colorIdx, dragItemId, onDragStart, onDrop,
+  vendor, items, colorIdx, dragItemId, onDragStart, onDrop, onRemove,
 }: {
   vendor: string;
   items: InventoryItem[];
@@ -87,6 +88,7 @@ function ShoppingCard({
   dragItemId: string | null;
   onDragStart: (id: string) => void;
   onDrop: (dragId: string, targetVendor: string) => void;
+  onRemove?: () => void;
 }) {
   const color = bucketColor(colorIdx);
   const [isOver, setIsOver] = useState(false);
@@ -106,7 +108,18 @@ function ShoppingCard({
         <span className="font-semibold text-sm">
           {vendor === 'No Vendor' ? '—' : '🏪'} {vendor}
         </span>
-        <span className="text-white/60 text-xs">{items.length} item{items.length !== 1 ? 's' : ''}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-white/60 text-xs">{items.length} item{items.length !== 1 ? 's' : ''}</span>
+          {onRemove && items.length === 0 && (
+            <button
+              onClick={onRemove}
+              className="text-white/70 hover:text-white transition-colors"
+              title="Remove vendor"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
       {/* Items */}
       <div className={cn('divide-y divide-border', color.bg, 'dark:bg-transparent')}>
@@ -154,6 +167,9 @@ function ShoppingTabContent({ items, onRefresh }: { items: InventoryItem[]; onRe
   const needed = items.filter(i => stockStatus(i) === 'critical' || (stockStatus(i) === 'none' && i.min_level > 0));
   const [localItems, setLocalItems] = useState<InventoryItem[]>(needed);
   const [dragItemId, setDragItemId] = useState('');
+  const [extraVendors, setExtraVendors] = useState<string[]>([]);
+  const [addingVendor, setAddingVendor] = useState(false);
+  const [newVendorName, setNewVendorName] = useState('');
 
   useEffect(() => { setLocalItems(needed); }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -163,9 +179,21 @@ function ShoppingTabContent({ items, onRefresh }: { items: InventoryItem[]; onRe
     if (!vendorMap[v]) vendorMap[v] = [];
     vendorMap[v].push(item);
   }
+  for (const v of extraVendors) {
+    if (!vendorMap[v]) vendorMap[v] = [];
+  }
   const vendors = Object.keys(vendorMap).sort((a, b) =>
     a === 'No Vendor' ? 1 : b === 'No Vendor' ? -1 : a.localeCompare(b)
   );
+
+  function addVendor() {
+    const name = newVendorName.trim();
+    if (!name) return;
+    if (vendors.includes(name)) { toast.error('Vendor already exists'); return; }
+    setExtraVendors(prev => [...prev, name]);
+    setNewVendorName('');
+    setAddingVendor(false);
+  }
 
   async function handleDrop(dragId: string, targetVendor: string) {
     const dragItem = localItems.find(i => i.id === dragId);
@@ -176,40 +204,84 @@ function ShoppingTabContent({ items, onRefresh }: { items: InventoryItem[]; onRe
     const newVendor1 = targetVendor === 'No Vendor' ? '' : targetVendor;
     setLocalItems(prev => prev.map(i => i.id === dragId ? { ...i, vendor_1: newVendor1 } : i));
 
-    const res = await fetch(`/api/inventory/${dragId}`, {
+    const res = await authFetch(`/api/inventory/${dragId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ vendor_1: newVendor1 }),
     });
-    if (!res.ok) toast.error('Failed to update vendor');
-    else onRefresh();
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      toast.error(errData.error ?? `Failed to update vendor (${res.status})`);
+      // revert optimistic update
+      setLocalItems(prev => prev.map(i => i.id === dragId ? { ...i, vendor_1: dragItem.vendor_1 } : i));
+    } else {
+      onRefresh();
+    }
   }
 
-  if (needed.length === 0) return (
-    <div className="text-center py-16 text-muted-foreground">
-      <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-30" />
-      <p className="font-medium">All stocked up!</p>
-    </div>
-  );
+  const namedVendorCount = vendors.filter(v => v !== 'No Vendor').length;
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        {needed.length} item{needed.length !== 1 ? 's' : ''} to restock
-        {vendors.filter(v => v !== 'No Vendor').length > 0 && ` · ${vendors.filter(v => v !== 'No Vendor').length} vendor${vendors.filter(v => v !== 'No Vendor').length !== 1 ? 's' : ''}`}
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {vendors.map((vendor, vi) => (
-          <ShoppingCard
-            key={vendor}
-            vendor={vendor}
-            items={vendorMap[vendor]}
-            colorIdx={vi}
-            dragItemId={dragItemId}
-            onDragStart={setDragItemId}
-            onDrop={handleDrop}
-          />
-        ))}
+      {needed.length === 0 && extraVendors.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p className="font-medium">All stocked up!</p>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <p className="text-sm text-muted-foreground">
+              {needed.length} item{needed.length !== 1 ? 's' : ''} to restock
+              {namedVendorCount > 0 && ` · ${namedVendorCount} vendor${namedVendorCount !== 1 ? 's' : ''}`}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {vendors.map((vendor, vi) => (
+              <ShoppingCard
+                key={vendor}
+                vendor={vendor}
+                items={vendorMap[vendor]}
+                colorIdx={vi}
+                dragItemId={dragItemId}
+                onDragStart={setDragItemId}
+                onDrop={handleDrop}
+                onRemove={extraVendors.includes(vendor) && vendorMap[vendor].length === 0
+                  ? () => setExtraVendors(prev => prev.filter(v => v !== vendor))
+                  : undefined
+                }
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Add Vendor */}
+      <div className="pt-1">
+        {addingVendor ? (
+          <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/30">
+            <input
+              value={newVendorName}
+              onChange={e => setNewVendorName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') addVendor(); if (e.key === 'Escape') setAddingVendor(false); }}
+              placeholder="Vendor name (e.g. Fresh Farm)"
+              className="flex-1 border rounded px-3 py-1.5 text-sm"
+              autoFocus
+            />
+            <button onClick={addVendor} className="bg-primary text-primary-foreground px-4 py-1.5 rounded text-sm font-medium">
+              Add
+            </button>
+            <button onClick={() => { setAddingVendor(false); setNewVendorName(''); }} className="p-1.5 text-muted-foreground">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setAddingVendor(true)}
+            className="flex items-center gap-2 border-2 border-dashed border-muted-foreground/30 text-muted-foreground hover:border-primary hover:text-primary rounded-xl px-4 py-3 w-full justify-center text-sm font-medium transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Add Vendor
+          </button>
+        )}
       </div>
     </div>
   );
@@ -268,9 +340,8 @@ function BucketCard({
     setLocalItems(reordered);
     Promise.all(
       reordered.map((item, i) =>
-        fetch(`/api/inventory/${item.id}`, {
+        authFetch(`/api/inventory/${item.id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sort_order: (i + 1) * 10 }),
         })
       )
@@ -278,9 +349,8 @@ function BucketCard({
   }
 
   async function saveUnit(itemId: string, unit: string) {
-    const res = await fetch(`/api/inventory/${itemId}`, {
+    const res = await authFetch(`/api/inventory/${itemId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ unit: unit.trim() }),
     });
     setEditingUnit(null);
@@ -295,9 +365,8 @@ function BucketCard({
 
   async function saveBucketName() {
     if (!bucketName.trim()) return;
-    const res = await fetch(`/api/inventory/buckets/${bucket.id}`, {
+    const res = await authFetch(`/api/inventory/buckets/${bucket.id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: bucketName.trim() }),
     });
     if (!res.ok) { toast.error('Failed to rename'); return; }
@@ -308,7 +377,7 @@ function BucketCard({
 
   async function deleteBucket() {
     if (!confirm(`Delete bucket "${bucket.name}"? Items will become unassigned.`)) return;
-    const res = await fetch(`/api/inventory/buckets/${bucket.id}`, { method: 'DELETE' });
+    const res = await authFetch(`/api/inventory/buckets/${bucket.id}`, { method: 'DELETE' });
     if (!res.ok) { toast.error('Delete failed'); return; }
     toast.success('Bucket deleted');
     onRefresh();
@@ -316,9 +385,8 @@ function BucketCard({
 
   async function saveItemEdit(item: InventoryItem) {
     setSaving(true);
-    const res = await fetch(`/api/inventory/${item.id}`, {
+    const res = await authFetch(`/api/inventory/${item.id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: editForm.name,
         unit: editForm.unit,
@@ -328,15 +396,18 @@ function BucketCard({
       }),
     });
     setSaving(false);
-    if (!res.ok) { toast.error('Save failed'); return; }
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      toast.error(errData.error ?? `Save failed (${res.status})`);
+      return;
+    }
     setEditingItem(null);
     onRefresh();
   }
 
   async function deactivateItem(item: InventoryItem) {
-    const res = await fetch(`/api/inventory/${item.id}`, {
+    const res = await authFetch(`/api/inventory/${item.id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ active: false }),
     });
     if (!res.ok) { toast.error('Failed'); return; }
@@ -345,9 +416,8 @@ function BucketCard({
   }
 
   async function moveItem(itemId: string, toBucketId: string | null) {
-    const res = await fetch(`/api/inventory/${itemId}`, {
+    const res = await authFetch(`/api/inventory/${itemId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ bucket_id: toBucketId }),
     });
     if (!res.ok) { toast.error('Move failed'); return; }
@@ -359,9 +429,8 @@ function BucketCard({
   async function addItemToBucket() {
     if (!newItem.name.trim()) { toast.error('Name required'); return; }
     setSaving(true);
-    const res = await fetch('/api/inventory', {
+    const res = await authFetch('/api/inventory', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: newItem.name.trim(),
         unit: newItem.unit,
@@ -383,8 +452,8 @@ function BucketCard({
   return (
     <div className={`rounded-xl border-2 ${color.border} overflow-hidden shadow-sm`}>
       {/* Card header */}
-      <div className={`${color.header} text-white px-4 py-2.5 flex items-center justify-between`}>
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+      <div className={`${color.header} text-white px-3 py-2.5 flex items-start justify-between gap-1`}>
+        <div className="flex-1 min-w-0">
           {tab === 'manage' && editingBucket ? (
             <div className="flex items-center gap-1 flex-1">
               <input
@@ -402,16 +471,18 @@ function BucketCard({
               </button>
             </div>
           ) : (
-            <>
-              <span className="font-bold text-sm truncate">{bucket.name}</span>
-              <span className="text-white/60 text-xs shrink-0">{items.length} items</span>
-              {criticalCount > 0 && (
-                <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full shrink-0">{criticalCount} low</span>
-              )}
-              {lowCount > 0 && criticalCount === 0 && (
-                <span className="text-xs bg-amber-400 text-white px-1.5 py-0.5 rounded-full shrink-0">{lowCount} near</span>
-              )}
-            </>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm leading-snug break-words">{bucket.name}</p>
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                <span className="text-white/60 text-xs">{items.length} items</span>
+                {criticalCount > 0 && (
+                  <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full">{criticalCount} low</span>
+                )}
+                {lowCount > 0 && criticalCount === 0 && (
+                  <span className="text-xs bg-amber-400 text-white px-1.5 py-0.5 rounded-full">{lowCount} near</span>
+                )}
+              </div>
+            </div>
           )}
         </div>
         <div className="flex items-center gap-1 ml-2 shrink-0">
@@ -723,6 +794,7 @@ export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [loading, setLoading] = useState(true);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Log tab state
   const todayIST = new Date().toLocaleString('en-CA', { timeZone: 'Asia/Kolkata' }).split(',')[0];
@@ -734,8 +806,9 @@ export default function InventoryPage() {
   const [addingBucket, setAddingBucket] = useState(false);
   const [newBucketName, setNewBucketName] = useState('');
 
+  // Fetches data and updates state. Does NOT touch loading state —
+  // loading starts true and is cleared once on first fetch completion.
   const load = useCallback(async () => {
-    setLoading(true);
     const [itemsRes, bucketsRes] = await Promise.all([
       fetch('/api/inventory'),
       fetch('/api/inventory/buckets'),
@@ -744,7 +817,7 @@ export default function InventoryPage() {
       const { items: data } = await itemsRes.json();
       const list = data ?? [];
       setItems(list);
-      // pre-fill quantities with latest known
+      // pre-fill quantities with latest known, never overwrite user edits
       setQuantities((prev) => {
         const next = { ...prev };
         for (const item of list) {
@@ -762,8 +835,14 @@ export default function InventoryPage() {
       const { buckets: data } = await bucketsRes.json();
       setBuckets(data ?? []);
     }
-    setLoading(false);
+    setLoading(false); // no-op after first load; clears spinner on initial mount
   }, []);
+
+  // Debounced silent refresh — batches rapid consecutive changes into one fetch
+  const refresh = useCallback(() => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(load, 350);
+  }, [load]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -777,9 +856,8 @@ export default function InventoryPage() {
       .map(i => ({ item_id: i.id, quantity: Number(quantities[i.id]) }));
     if (entries.length === 0) { toast.error('Enter at least one quantity'); return; }
     setSaving(true);
-    const res = await fetch('/api/inventory/log', {
+    const res = await authFetch('/api/inventory/log', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ log_date: logDate, entries }),
     });
     setSaving(false);
@@ -791,9 +869,8 @@ export default function InventoryPage() {
 
   async function addBucket() {
     if (!newBucketName.trim()) { toast.error('Name required'); return; }
-    const res = await fetch('/api/inventory/buckets', {
+    const res = await authFetch('/api/inventory/buckets', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newBucketName.trim() }),
     });
     if (!res.ok) { toast.error('Failed'); return; }
@@ -917,10 +994,10 @@ export default function InventoryPage() {
           )}
 
           {/* ── Shopping tab: vendor-wise bucket cards with drag-and-drop ── */}
-          {tab === 'shopping' && <ShoppingTabContent items={items} onRefresh={load} />}
+          {tab === 'shopping' && <ShoppingTabContent items={items} onRefresh={refresh} />}
 
           {/* ── Non-shopping tabs: bucket grid ── */}
-          {tab !== 'shopping' && <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {tab !== 'shopping' && <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {buckets.map((bucket, idx) => {
               const bucketItems = itemsByBucket[bucket.id] ?? [];
               return (
@@ -933,7 +1010,7 @@ export default function InventoryPage() {
                   quantities={quantities}
                   onQtyChange={setQty}
                   onMoveItem={() => {}}
-                  onRefresh={load}
+                  onRefresh={refresh}
                   allBuckets={buckets}
                 />
               );
@@ -949,7 +1026,7 @@ export default function InventoryPage() {
                 quantities={quantities}
                 onQtyChange={setQty}
                 onMoveItem={() => {}}
-                onRefresh={load}
+                onRefresh={refresh}
                 allBuckets={buckets}
               />
             )}

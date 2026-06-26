@@ -1,17 +1,11 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createClient } from '@/lib/supabase/server';
-
-async function requireAuth() {
-  const auth = createClient();
-  const { data: { user } } = await auth.auth.getUser();
-  return user;
-}
+import { requireAuth } from '@/lib/supabase/serverAuth';
 
 /** PUT — update an inventory item */
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
-  const user = await requireAuth();
+  const user = await requireAuth(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json().catch(() => null);
@@ -45,7 +39,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const user = await requireAuth();
+  const user = await requireAuth(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(request.url);

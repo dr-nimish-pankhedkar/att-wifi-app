@@ -1,16 +1,11 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createClient } from '@/lib/supabase/server';
-
-async function requireAdminAuth() {
-  const auth = createClient();
-  const { data: { user } } = await auth.auth.getUser();
-  return user;
-}
+import { requireAuth } from '@/lib/supabase/serverAuth';
 
 /**
- * POST — staff or admin can log a stock check.
+ * POST — open to staff (PIN-authed) and admins.
+ * Staff pass staff_id in the body; admins omit it and their user.id is used.
  * Body: { log_date: "YYYY-MM-DD", entries: [{ item_id, quantity, notes? }], staff_id? }
  */
 export async function POST(request: NextRequest) {
@@ -19,26 +14,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'log_date and entries[] are required' }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
-
-  // logged_by: use provided staff_id, or fall back to admin session
+  // logged_by: use staff_id from body (PIN flow) or session user (admin flow)
   let loggedBy: string | null = body.staff_id ?? null;
   if (!loggedBy) {
-    try {
-      const auth = createClient();
-      const { data: { user } } = await auth.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        loggedBy = profile?.id ?? null;
-      }
-    } catch {
-      // non-fatal
-    }
+    const user = await requireAuth(request);
+    if (user) loggedBy = user.id;
   }
+
+  const supabase = createAdminClient();
 
   const rows = (body.entries as Array<{ item_id: string; quantity: number; notes?: string }>)
     .filter((e) => e.item_id && e.quantity !== undefined && e.quantity !== null)
@@ -72,7 +55,7 @@ export async function POST(request: NextRequest) {
 
 /** GET — admin only: log history */
 export async function GET(request: NextRequest) {
-  const user = await requireAdminAuth();
+  const user = await requireAuth(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(request.url);

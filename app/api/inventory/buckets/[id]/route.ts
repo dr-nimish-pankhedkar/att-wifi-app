@@ -1,16 +1,10 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createClient } from '@/lib/supabase/server';
-
-async function requireAuth() {
-  const auth = createClient();
-  const { data: { user } } = await auth.auth.getUser();
-  return user;
-}
+import { requireAuth } from '@/lib/supabase/serverAuth';
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
-  const user = await requireAuth();
+  const user = await requireAuth(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json().catch(() => null);
@@ -33,15 +27,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  const user = await requireAuth();
+  const user = await requireAuth(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
-  const moveTo = searchParams.get('move_to'); // optional: move items to another bucket
+  const moveTo = searchParams.get('move_to');
 
   const supabase = createAdminClient();
 
-  // Reassign items before deleting
   await supabase
     .from('inventory_items')
     .update({ bucket_id: moveTo ?? null })

@@ -36,3 +36,7 @@ set bucket_id = b.id
 from inventory_buckets b
 where b.name = i.category
   and i.bucket_id is null;
+
+-- Vendor columns (primary and alternative vendor names per item)
+alter table inventory_items add column if not exists vendor_1 text default '';
+alter table inventory_items add column if not exists vendor_2 text default '';

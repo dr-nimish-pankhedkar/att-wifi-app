@@ -1,13 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createClient } from '@/lib/supabase/server';
-
-async function requireAdminAuth() {
-  const auth = createClient();
-  const { data: { user } } = await auth.auth.getUser();
-  return user;
-}
+import { requireAuth } from '@/lib/supabase/serverAuth';
 
 /** GET — public; staff need this without an auth session */
 export async function GET() {
@@ -55,7 +49,7 @@ export async function GET() {
 
 /** POST — admin only: create a new inventory item */
 export async function POST(request: NextRequest) {
-  const user = await requireAdminAuth();
+  const user = await requireAuth(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json().catch(() => null);
