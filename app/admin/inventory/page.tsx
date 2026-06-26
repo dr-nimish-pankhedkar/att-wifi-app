@@ -208,8 +208,14 @@ function ShoppingTabContent({ items, onRefresh }: { items: InventoryItem[]; onRe
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ vendor_1: newVendor1 }),
     });
-    if (!res.ok) toast.error('Failed to update vendor');
-    else onRefresh();
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      toast.error(errData.error ?? `Failed to update vendor (${res.status})`);
+      // revert optimistic update
+      setLocalItems(prev => prev.map(i => i.id === dragId ? { ...i, vendor_1: dragItem.vendor_1 } : i));
+    } else {
+      onRefresh();
+    }
   }
 
   const namedVendorCount = vendors.filter(v => v !== 'No Vendor').length;
