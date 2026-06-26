@@ -79,7 +79,7 @@ function StockBadge({ item }: { item: InventoryItem }) {
 ══════════════════════════════════════════════════════════ */
 
 function ShoppingCard({
-  vendor, items, colorIdx, dragItemId, onDragStart, onDrop,
+  vendor, items, colorIdx, dragItemId, onDragStart, onDrop, onRemove,
 }: {
   vendor: string;
   items: InventoryItem[];
@@ -87,6 +87,7 @@ function ShoppingCard({
   dragItemId: string | null;
   onDragStart: (id: string) => void;
   onDrop: (dragId: string, targetVendor: string) => void;
+  onRemove?: () => void;
 }) {
   const color = bucketColor(colorIdx);
   const [isOver, setIsOver] = useState(false);
@@ -106,7 +107,18 @@ function ShoppingCard({
         <span className="font-semibold text-sm">
           {vendor === 'No Vendor' ? '—' : '🏪'} {vendor}
         </span>
-        <span className="text-white/60 text-xs">{items.length} item{items.length !== 1 ? 's' : ''}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-white/60 text-xs">{items.length} item{items.length !== 1 ? 's' : ''}</span>
+          {onRemove && items.length === 0 && (
+            <button
+              onClick={onRemove}
+              className="text-white/70 hover:text-white transition-colors"
+              title="Remove vendor"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
       {/* Items */}
       <div className={cn('divide-y divide-border', color.bg, 'dark:bg-transparent')}>
@@ -154,6 +166,9 @@ function ShoppingTabContent({ items, onRefresh }: { items: InventoryItem[]; onRe
   const needed = items.filter(i => stockStatus(i) === 'critical' || (stockStatus(i) === 'none' && i.min_level > 0));
   const [localItems, setLocalItems] = useState<InventoryItem[]>(needed);
   const [dragItemId, setDragItemId] = useState('');
+  const [extraVendors, setExtraVendors] = useState<string[]>([]);
+  const [addingVendor, setAddingVendor] = useState(false);
+  const [newVendorName, setNewVendorName] = useState('');
 
   useEffect(() => { setLocalItems(needed); }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -163,9 +178,21 @@ function ShoppingTabContent({ items, onRefresh }: { items: InventoryItem[]; onRe
     if (!vendorMap[v]) vendorMap[v] = [];
     vendorMap[v].push(item);
   }
+  for (const v of extraVendors) {
+    if (!vendorMap[v]) vendorMap[v] = [];
+  }
   const vendors = Object.keys(vendorMap).sort((a, b) =>
     a === 'No Vendor' ? 1 : b === 'No Vendor' ? -1 : a.localeCompare(b)
   );
+
+  function addVendor() {
+    const name = newVendorName.trim();
+    if (!name) return;
+    if (vendors.includes(name)) { toast.error('Vendor already exists'); return; }
+    setExtraVendors(prev => [...prev, name]);
+    setNewVendorName('');
+    setAddingVendor(false);
+  }
 
   async function handleDrop(dragId: string, targetVendor: string) {
     const dragItem = localItems.find(i => i.id === dragId);
@@ -185,31 +212,70 @@ function ShoppingTabContent({ items, onRefresh }: { items: InventoryItem[]; onRe
     else onRefresh();
   }
 
-  if (needed.length === 0) return (
-    <div className="text-center py-16 text-muted-foreground">
-      <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-30" />
-      <p className="font-medium">All stocked up!</p>
-    </div>
-  );
+  const namedVendorCount = vendors.filter(v => v !== 'No Vendor').length;
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        {needed.length} item{needed.length !== 1 ? 's' : ''} to restock
-        {vendors.filter(v => v !== 'No Vendor').length > 0 && ` · ${vendors.filter(v => v !== 'No Vendor').length} vendor${vendors.filter(v => v !== 'No Vendor').length !== 1 ? 's' : ''}`}
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {vendors.map((vendor, vi) => (
-          <ShoppingCard
-            key={vendor}
-            vendor={vendor}
-            items={vendorMap[vendor]}
-            colorIdx={vi}
-            dragItemId={dragItemId}
-            onDragStart={setDragItemId}
-            onDrop={handleDrop}
-          />
-        ))}
+      {needed.length === 0 && extraVendors.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p className="font-medium">All stocked up!</p>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <p className="text-sm text-muted-foreground">
+              {needed.length} item{needed.length !== 1 ? 's' : ''} to restock
+              {namedVendorCount > 0 && ` · ${namedVendorCount} vendor${namedVendorCount !== 1 ? 's' : ''}`}
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {vendors.map((vendor, vi) => (
+              <ShoppingCard
+                key={vendor}
+                vendor={vendor}
+                items={vendorMap[vendor]}
+                colorIdx={vi}
+                dragItemId={dragItemId}
+                onDragStart={setDragItemId}
+                onDrop={handleDrop}
+                onRemove={extraVendors.includes(vendor) && vendorMap[vendor].length === 0
+                  ? () => setExtraVendors(prev => prev.filter(v => v !== vendor))
+                  : undefined
+                }
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Add Vendor */}
+      <div className="pt-1">
+        {addingVendor ? (
+          <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/30">
+            <input
+              value={newVendorName}
+              onChange={e => setNewVendorName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') addVendor(); if (e.key === 'Escape') setAddingVendor(false); }}
+              placeholder="Vendor name (e.g. Fresh Farm)"
+              className="flex-1 border rounded px-3 py-1.5 text-sm"
+              autoFocus
+            />
+            <button onClick={addVendor} className="bg-primary text-primary-foreground px-4 py-1.5 rounded text-sm font-medium">
+              Add
+            </button>
+            <button onClick={() => { setAddingVendor(false); setNewVendorName(''); }} className="p-1.5 text-muted-foreground">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setAddingVendor(true)}
+            className="flex items-center gap-2 border-2 border-dashed border-muted-foreground/30 text-muted-foreground hover:border-primary hover:text-primary rounded-xl px-4 py-3 w-full justify-center text-sm font-medium transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Add Vendor
+          </button>
+        )}
       </div>
     </div>
   );
