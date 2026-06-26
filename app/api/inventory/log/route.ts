@@ -4,16 +4,21 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/supabase/serverAuth';
 
 /**
- * POST — admin logs a stock check.
- * Body: { log_date: "YYYY-MM-DD", entries: [{ item_id, quantity, notes? }] }
+ * POST — open to staff (PIN-authed) and admins.
+ * Staff pass staff_id in the body; admins omit it and their user.id is used.
+ * Body: { log_date: "YYYY-MM-DD", entries: [{ item_id, quantity, notes? }], staff_id? }
  */
 export async function POST(request: NextRequest) {
-  const user = await requireAuth(request);
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   const body = await request.json().catch(() => null);
   if (!body?.log_date || !Array.isArray(body.entries)) {
     return NextResponse.json({ error: 'log_date and entries[] are required' }, { status: 400 });
+  }
+
+  // logged_by: use staff_id from body (PIN flow) or session user (admin flow)
+  let loggedBy: string | null = body.staff_id ?? null;
+  if (!loggedBy) {
+    const user = await requireAuth(request);
+    if (user) loggedBy = user.id;
   }
 
   const supabase = createAdminClient();
@@ -24,7 +29,7 @@ export async function POST(request: NextRequest) {
       item_id: e.item_id,
       quantity: Number(e.quantity),
       notes: e.notes ?? null,
-      logged_by: user.id,
+      logged_by: loggedBy,
       log_date: body.log_date,
     }));
 
