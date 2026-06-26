@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   ShoppingCart, ClipboardList, Package, Settings2, Plus, Trash2, Pencil,
@@ -794,6 +794,7 @@ export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [loading, setLoading] = useState(true);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Log tab state
   const todayIST = new Date().toLocaleString('en-CA', { timeZone: 'Asia/Kolkata' }).split(',')[0];
@@ -805,8 +806,9 @@ export default function InventoryPage() {
   const [addingBucket, setAddingBucket] = useState(false);
   const [newBucketName, setNewBucketName] = useState('');
 
+  // Fetches data and updates state. Does NOT touch loading state —
+  // loading starts true and is cleared once on first fetch completion.
   const load = useCallback(async () => {
-    setLoading(true);
     const [itemsRes, bucketsRes] = await Promise.all([
       fetch('/api/inventory'),
       fetch('/api/inventory/buckets'),
@@ -815,7 +817,7 @@ export default function InventoryPage() {
       const { items: data } = await itemsRes.json();
       const list = data ?? [];
       setItems(list);
-      // pre-fill quantities with latest known
+      // pre-fill quantities with latest known, never overwrite user edits
       setQuantities((prev) => {
         const next = { ...prev };
         for (const item of list) {
@@ -833,8 +835,14 @@ export default function InventoryPage() {
       const { buckets: data } = await bucketsRes.json();
       setBuckets(data ?? []);
     }
-    setLoading(false);
+    setLoading(false); // no-op after first load; clears spinner on initial mount
   }, []);
+
+  // Debounced silent refresh — batches rapid consecutive changes into one fetch
+  const refresh = useCallback(() => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(load, 350);
+  }, [load]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -986,7 +994,7 @@ export default function InventoryPage() {
           )}
 
           {/* ── Shopping tab: vendor-wise bucket cards with drag-and-drop ── */}
-          {tab === 'shopping' && <ShoppingTabContent items={items} onRefresh={load} />}
+          {tab === 'shopping' && <ShoppingTabContent items={items} onRefresh={refresh} />}
 
           {/* ── Non-shopping tabs: bucket grid ── */}
           {tab !== 'shopping' && <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1002,7 +1010,7 @@ export default function InventoryPage() {
                   quantities={quantities}
                   onQtyChange={setQty}
                   onMoveItem={() => {}}
-                  onRefresh={load}
+                  onRefresh={refresh}
                   allBuckets={buckets}
                 />
               );
@@ -1018,7 +1026,7 @@ export default function InventoryPage() {
                 quantities={quantities}
                 onQtyChange={setQty}
                 onMoveItem={() => {}}
-                onRefresh={load}
+                onRefresh={refresh}
                 allBuckets={buckets}
               />
             )}
