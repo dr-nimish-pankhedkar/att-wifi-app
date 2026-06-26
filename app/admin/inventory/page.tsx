@@ -235,7 +235,7 @@ function ShoppingTabContent({ items, onRefresh }: { items: InventoryItem[]; onRe
               {namedVendorCount > 0 && ` · ${namedVendorCount} vendor${namedVendorCount !== 1 ? 's' : ''}`}
             </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {vendors.map((vendor, vi) => (
               <ShoppingCard
                 key={vendor}
@@ -997,7 +997,7 @@ export default function InventoryPage() {
           {tab === 'shopping' && <ShoppingTabContent items={items} onRefresh={refresh} />}
 
           {/* ── Non-shopping tabs: bucket grid ── */}
-          {tab !== 'shopping' && <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {tab !== 'shopping' && <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {buckets.map((bucket, idx) => {
               const bucketItems = itemsByBucket[bucket.id] ?? [];
               return (
