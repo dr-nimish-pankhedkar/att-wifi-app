@@ -7,6 +7,7 @@ import {
   Check, X, ChevronDown, ChevronUp, MoveRight, GripVertical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { authFetch } from '@/lib/supabase/authFetch';
 
 /* ── Types ──────────────────────────────────────────────── */
 
@@ -203,9 +204,8 @@ function ShoppingTabContent({ items, onRefresh }: { items: InventoryItem[]; onRe
     const newVendor1 = targetVendor === 'No Vendor' ? '' : targetVendor;
     setLocalItems(prev => prev.map(i => i.id === dragId ? { ...i, vendor_1: newVendor1 } : i));
 
-    const res = await fetch(`/api/inventory/${dragId}`, {
+    const res = await authFetch(`/api/inventory/${dragId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ vendor_1: newVendor1 }),
     });
     if (!res.ok) {
@@ -340,9 +340,8 @@ function BucketCard({
     setLocalItems(reordered);
     Promise.all(
       reordered.map((item, i) =>
-        fetch(`/api/inventory/${item.id}`, {
+        authFetch(`/api/inventory/${item.id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sort_order: (i + 1) * 10 }),
         })
       )
@@ -350,9 +349,8 @@ function BucketCard({
   }
 
   async function saveUnit(itemId: string, unit: string) {
-    const res = await fetch(`/api/inventory/${itemId}`, {
+    const res = await authFetch(`/api/inventory/${itemId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ unit: unit.trim() }),
     });
     setEditingUnit(null);
@@ -367,9 +365,8 @@ function BucketCard({
 
   async function saveBucketName() {
     if (!bucketName.trim()) return;
-    const res = await fetch(`/api/inventory/buckets/${bucket.id}`, {
+    const res = await authFetch(`/api/inventory/buckets/${bucket.id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: bucketName.trim() }),
     });
     if (!res.ok) { toast.error('Failed to rename'); return; }
@@ -380,7 +377,7 @@ function BucketCard({
 
   async function deleteBucket() {
     if (!confirm(`Delete bucket "${bucket.name}"? Items will become unassigned.`)) return;
-    const res = await fetch(`/api/inventory/buckets/${bucket.id}`, { method: 'DELETE' });
+    const res = await authFetch(`/api/inventory/buckets/${bucket.id}`, { method: 'DELETE' });
     if (!res.ok) { toast.error('Delete failed'); return; }
     toast.success('Bucket deleted');
     onRefresh();
@@ -388,9 +385,8 @@ function BucketCard({
 
   async function saveItemEdit(item: InventoryItem) {
     setSaving(true);
-    const res = await fetch(`/api/inventory/${item.id}`, {
+    const res = await authFetch(`/api/inventory/${item.id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: editForm.name,
         unit: editForm.unit,
@@ -410,9 +406,8 @@ function BucketCard({
   }
 
   async function deactivateItem(item: InventoryItem) {
-    const res = await fetch(`/api/inventory/${item.id}`, {
+    const res = await authFetch(`/api/inventory/${item.id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ active: false }),
     });
     if (!res.ok) { toast.error('Failed'); return; }
@@ -421,9 +416,8 @@ function BucketCard({
   }
 
   async function moveItem(itemId: string, toBucketId: string | null) {
-    const res = await fetch(`/api/inventory/${itemId}`, {
+    const res = await authFetch(`/api/inventory/${itemId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ bucket_id: toBucketId }),
     });
     if (!res.ok) { toast.error('Move failed'); return; }
@@ -435,9 +429,8 @@ function BucketCard({
   async function addItemToBucket() {
     if (!newItem.name.trim()) { toast.error('Name required'); return; }
     setSaving(true);
-    const res = await fetch('/api/inventory', {
+    const res = await authFetch('/api/inventory', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: newItem.name.trim(),
         unit: newItem.unit,
@@ -855,9 +848,8 @@ export default function InventoryPage() {
       .map(i => ({ item_id: i.id, quantity: Number(quantities[i.id]) }));
     if (entries.length === 0) { toast.error('Enter at least one quantity'); return; }
     setSaving(true);
-    const res = await fetch('/api/inventory/log', {
+    const res = await authFetch('/api/inventory/log', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ log_date: logDate, entries }),
     });
     setSaving(false);
@@ -869,9 +861,8 @@ export default function InventoryPage() {
 
   async function addBucket() {
     if (!newBucketName.trim()) { toast.error('Name required'); return; }
-    const res = await fetch('/api/inventory/buckets', {
+    const res = await authFetch('/api/inventory/buckets', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newBucketName.trim() }),
     });
     if (!res.ok) { toast.error('Failed'); return; }
