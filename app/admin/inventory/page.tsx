@@ -452,8 +452,8 @@ function BucketCard({
   return (
     <div className={`rounded-xl border-2 ${color.border} overflow-hidden shadow-sm`}>
       {/* Card header */}
-      <div className={`${color.header} text-white px-4 py-2.5 flex items-center justify-between`}>
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+      <div className={`${color.header} text-white px-3 py-2.5 flex items-start justify-between gap-1`}>
+        <div className="flex-1 min-w-0">
           {tab === 'manage' && editingBucket ? (
             <div className="flex items-center gap-1 flex-1">
               <input
@@ -471,16 +471,18 @@ function BucketCard({
               </button>
             </div>
           ) : (
-            <>
-              <span className="font-bold text-sm truncate">{bucket.name}</span>
-              <span className="text-white/60 text-xs shrink-0">{items.length} items</span>
-              {criticalCount > 0 && (
-                <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full shrink-0">{criticalCount} low</span>
-              )}
-              {lowCount > 0 && criticalCount === 0 && (
-                <span className="text-xs bg-amber-400 text-white px-1.5 py-0.5 rounded-full shrink-0">{lowCount} near</span>
-              )}
-            </>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm leading-snug break-words">{bucket.name}</p>
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                <span className="text-white/60 text-xs">{items.length} items</span>
+                {criticalCount > 0 && (
+                  <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full">{criticalCount} low</span>
+                )}
+                {lowCount > 0 && criticalCount === 0 && (
+                  <span className="text-xs bg-amber-400 text-white px-1.5 py-0.5 rounded-full">{lowCount} near</span>
+                )}
+              </div>
+            </div>
           )}
         </div>
         <div className="flex items-center gap-1 ml-2 shrink-0">
