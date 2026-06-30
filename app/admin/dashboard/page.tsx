@@ -1,6 +1,6 @@
 'use client';
 export const dynamic = 'force-dynamic';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight, Plus, Trash2, Save, X } from 'lucide-react';
@@ -154,8 +154,8 @@ export default function DashboardPage() {
   const holidayDates = new Set(holidays.map((h) => h.date));
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
-  const loadMonth = useCallback(async () => {
-    setMonthLoading(true);
+  const loadMonth = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setMonthLoading(true);
     const [staffRes, monthRes, holidaysRes, settingsRes] = await Promise.all([
       fetch('/api/staff').then((r) => r.json()),
       fetch(`/api/attendance/monthly?month=${monthStr}`).then((r) => r.json()),
@@ -169,6 +169,12 @@ export default function DashboardPage() {
     setSettings(settingsRes.settings ?? { off_days: '1' });
     setMonthLoading(false);
   }, [monthStr, year]);
+
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshMonth = useCallback(() => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => { loadMonth({ silent: true }); }, 350);
+  }, [loadMonth]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -216,14 +222,14 @@ export default function DashboardPage() {
       if (!res.ok) { toast.error(data.error); return; }
       toast.success('Attendance saved');
       setEditDialog(null);
-      loadMonth();
+      refreshMonth();
     } finally { setEditSaving(false); }
   }
 
   async function deleteRecord() {
     if (!editDialog?.record?.id || !confirm('Delete this attendance record?')) return;
     const res = await fetch(`/api/attendance?id=${editDialog.record.id}`, { method: 'DELETE' });
-    if (res.ok) { toast.success('Record deleted'); setEditDialog(null); loadMonth(); }
+    if (res.ok) { toast.success('Record deleted'); setEditDialog(null); refreshMonth(); }
     else toast.error('Delete failed');
   }
 
@@ -233,13 +239,13 @@ export default function DashboardPage() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newHoliday),
     });
-    if (res.ok) { toast.success('Holiday added'); setNewHoliday({ date: '', name: '' }); loadMonth(); }
+    if (res.ok) { toast.success('Holiday added'); setNewHoliday({ date: '', name: '' }); refreshMonth(); }
     else toast.error('Failed');
   }
 
   async function deleteHoliday(id: string) {
     const res = await fetch(`/api/holidays/${id}`, { method: 'DELETE' });
-    if (res.ok) { toast.success('Removed'); loadMonth(); }
+    if (res.ok) { toast.success('Removed'); refreshMonth(); }
   }
 
   // ── Monthly stats ──────────────────────────────────────────────────────

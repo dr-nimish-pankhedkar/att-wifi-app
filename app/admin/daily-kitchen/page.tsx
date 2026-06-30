@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import AdminNav from '@/components/admin/AdminNav';
@@ -349,8 +349,8 @@ export default function DailyKitchenAdminPage() {
     });
   }, [router, supabase.auth]);
 
-  const load = useCallback(async (d: string) => {
-    setLoading(true);
+  const load = useCallback(async (d: string, opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     const prev = shiftDate(d, -1);
     const [iRes, lRes, pRes] = await Promise.all([
       fetch('/api/daily-kitchen/items'),
@@ -364,11 +364,17 @@ export default function DailyKitchenAdminPage() {
     setLogs(lData ?? []);
     setEntries(eData ?? []);
     setPrevLogs(pData ?? []);
-    setExpandedItems(new Set());
+    if (!opts?.silent) setExpandedItems(new Set());
     setLoading(false);
   }, []);
 
   useEffect(() => { load(date); }, [date, load]);
+
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refresh = useCallback(() => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => { load(date, { silent: true }); }, 350);
+  }, [load, date]);
 
   const logMap: Record<string, { in?: number; closing?: number }> = {};
   for (const l of logs) {
@@ -601,7 +607,7 @@ export default function DailyKitchenAdminPage() {
               <div className="h-8 w-8 border-2 border-muted border-t-foreground rounded-full animate-spin" />
             </div>
           ) : (
-            <ManageTab items={items} onRefresh={() => load(date)} />
+            <ManageTab items={items} onRefresh={refresh} />
           )
         )}
       </main>

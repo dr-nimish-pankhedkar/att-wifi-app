@@ -1,6 +1,6 @@
 'use client';
 export const dynamic = 'force-dynamic';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import AdminNav from '@/components/admin/AdminNav';
@@ -30,8 +30,8 @@ export default function StaffPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const loadData = useCallback(() => {
-    setLoading(true);
+  const loadData = useCallback((opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     Promise.all([
       fetch('/api/staff').then((r) => r.json()),
       fetch('/api/shifts').then((r) => r.json()),
@@ -42,6 +42,12 @@ export default function StaffPage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refresh = useCallback(() => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => { loadData({ silent: true }); }, 350);
+  }, [loadData]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -58,7 +64,7 @@ export default function StaffPage() {
           <h2 className="text-2xl font-bold">Staff Management</h2>
           <p className="text-muted-foreground text-sm">Add, edit, or remove staff members</p>
         </div>
-        {loading ? <StaffTableSkeleton /> : <StaffTable staff={staff} shifts={shifts} onRefresh={loadData} />}
+        {loading ? <StaffTableSkeleton /> : <StaffTable staff={staff} shifts={shifts} onRefresh={refresh} />}
       </main>
     </div>
   );
