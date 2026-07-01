@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import PinPad from '@/components/kiosk/PinPad';
 import SuccessModal from '@/components/kiosk/SuccessModal';
 import { formatTimeIST, formatDateIST } from '@/lib/time';
-import { Package, Salad } from 'lucide-react';
+import { Package, Salad, IndianRupee } from 'lucide-react';
 
 interface CheckinResult {
   name: string;
@@ -108,6 +108,13 @@ export default function KioskPage() {
             Stock Check
           </Link>
         </div>
+        <Link
+          href="/expenses"
+          className="flex items-center justify-center gap-2 w-full max-w-xs bg-white/10 border border-white/20 text-white/80 hover:bg-white/20 hover:text-white rounded-2xl px-4 py-3 text-sm font-medium transition-all active:scale-95"
+        >
+          <IndianRupee className="w-4 h-4" />
+          Cash Expenses
+        </Link>
         <p className="text-white/30 text-xs text-center">
           Must be connected to office WiFi
         </p>
