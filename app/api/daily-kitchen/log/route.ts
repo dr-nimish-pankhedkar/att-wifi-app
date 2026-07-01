@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       .from('daily_kitchen_logs')
       .select('item_id, quantity')
       .eq('log_date', body.log_date)
-      .eq('shift', 'in')
+      .eq('shift', body.shift)
       .in('item_id', newRows.map((r) => r.item_id));
 
     const existingMap: Record<string, number> = {};
