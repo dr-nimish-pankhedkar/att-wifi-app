@@ -342,8 +342,6 @@ export default function DailyKitchenAdminPage() {
   const [entries, setEntries]      = useState<EntryRecord[]>([]);
   const [loading, setLoading]      = useState(true);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  const [wastageEditing, setWastageEditing] = useState<string | null>(null);
-  const [wastageInput, setWastageInput]     = useState('');
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -378,21 +376,7 @@ export default function DailyKitchenAdminPage() {
     refreshTimer.current = setTimeout(() => { load(date, { silent: true }); }, 350);
   }, [load, date]);
 
-  async function submitWastage(itemId: string) {
-    const qty = Number(wastageInput);
-    if (!wastageInput || isNaN(qty) || qty <= 0) { setWastageEditing(null); return; }
-    setWastageEditing(null);
-    setWastageInput('');
-    const res = await fetch('/api/daily-kitchen/log', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ log_date: date, shift: 'wastage', entries: [{ item_id: itemId, quantity: qty }] }),
-    });
-    if (res.ok) { toast.success('Wastage recorded'); refresh(); }
-    else { const d = await res.json(); toast.error(d.error ?? 'Failed to save wastage'); }
-  }
-
-  const logMap: Record<string, { in?: number; closing?: number; wastage?: number }> = {};
+const logMap: Record<string, { in?: number; closing?: number; wastage?: number }> = {};
   for (const l of logs) {
     if (!logMap[l.item_id]) logMap[l.item_id] = {};
     logMap[l.item_id][l.shift] = l.quantity;
@@ -556,35 +540,9 @@ export default function DailyKitchenAdminPage() {
                                           : <span className="inline-block px-2 py-0.5 rounded-md bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300 font-semibold text-sm">{cons}</span>}
                                     </td>
                                     <td className="px-4 py-2.5 text-center">
-                                      {wastageEditing === item.id ? (
-                                        <div className="flex items-center justify-center gap-1">
-                                          <input
-                                            autoFocus
-                                            type="number"
-                                            min="0"
-                                            value={wastageInput}
-                                            onChange={e => setWastageInput(e.target.value)}
-                                            onKeyDown={e => {
-                                              if (e.key === 'Enter') submitWastage(item.id);
-                                              if (e.key === 'Escape') setWastageEditing(null);
-                                            }}
-                                            className="w-14 border border-red-300 rounded px-1.5 py-0.5 text-sm text-center focus:ring-1 ring-red-400 focus:outline-none"
-                                          />
-                                          <button onClick={() => submitWastage(item.id)} className="text-red-500 hover:text-red-700 font-bold text-sm">✓</button>
-                                          <button onClick={() => setWastageEditing(null)} className="text-muted-foreground hover:text-foreground text-sm">✕</button>
-                                        </div>
-                                      ) : (
-                                        <div className="flex items-center justify-center gap-1.5">
-                                          {row.wastage !== undefined && (
-                                            <span className="font-semibold text-sm text-red-600">{row.wastage}</span>
-                                          )}
-                                          <button
-                                            onClick={() => { setWastageEditing(item.id); setWastageInput(row.wastage !== undefined ? String(row.wastage) : ''); }}
-                                            className="w-4 h-4 rounded-full bg-red-400 hover:bg-red-500 transition-colors flex-shrink-0"
-                                            title="Log wastage"
-                                          />
-                                        </div>
-                                      )}
+                                      {row.wastage !== undefined
+                                        ? <span className="inline-block px-2 py-0.5 rounded-md bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300 font-semibold text-sm">{row.wastage}</span>
+                                        : <span className="text-muted-foreground/40">—</span>}
                                     </td>
                                     <td className="px-3 py-2.5 text-center">
                                       {itemEntries.length > 0 ? (

@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, CheckCircle2, Delete, Sun, Moon } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Delete, Sun, Moon, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface StaffProfile { id: string; name: string; }
@@ -71,7 +71,7 @@ export default function DailyKitchenPage() {
   const [verifying, setVerifying] = useState(false);
   const [items, setItems]       = useState<KitchenItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
-  const [shift, setShift]       = useState<'in' | 'closing'>('in');
+  const [shift, setShift]       = useState<'in' | 'closing' | 'wastage'>('in');
   const [logDate, setLogDate]   = useState(todayIST);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [existingLogs, setExistingLogs] = useState<Record<string, number>>({});
@@ -197,7 +197,7 @@ export default function DailyKitchenPage() {
         <div className="text-center">
           <h2 className="text-2xl font-bold text-white">Saved!</h2>
           <p className="text-white/50 mt-1">
-            {filled} items · {shift === 'in' ? 'Morning IN' : 'Closing'} · {new Date(logDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}
+            {filled} items · {shift === 'in' ? 'Morning IN' : shift === 'wastage' ? 'Wastage' : 'Closing'} · {new Date(logDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}
           </p>
         </div>
         <div className="flex gap-3">
@@ -207,6 +207,14 @@ export default function DailyKitchenPage() {
           >
             Log {shift === 'in' ? 'Closing' : 'Morning IN'}
           </button>
+          {shift !== 'wastage' && (
+            <button
+              onClick={() => { setSaved(false); setQuantities({}); setShift('wastage'); }}
+              className="bg-red-500/20 border border-red-500/40 text-red-300 rounded-xl px-6 py-3 font-medium hover:bg-red-500/30"
+            >
+              Log Wastage
+            </button>
+          )}
           <button onClick={() => router.push('/')}
             className="bg-white/10 border border-white/20 text-white rounded-xl px-6 py-3 font-medium hover:bg-white/20"
           >
@@ -255,24 +263,35 @@ export default function DailyKitchenPage() {
           <button
             onClick={() => { setShift('in'); setQuantities({}); }}
             className={cn(
-              'flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold transition-all',
+              'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition-all',
               shift === 'in'
                 ? 'bg-amber-500/30 text-amber-300 border-r border-amber-500/30'
                 : 'bg-white/5 text-white/40 hover:bg-white/10 border-r border-white/10'
             )}
           >
-            <Sun className="w-4 h-4" /> Morning IN
+            <Sun className="w-3.5 h-3.5" /> Morning IN
           </button>
           <button
             onClick={() => { setShift('closing'); setQuantities({}); }}
             className={cn(
-              'flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold transition-all',
+              'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition-all',
               shift === 'closing'
-                ? 'bg-indigo-500/30 text-indigo-300'
+                ? 'bg-indigo-500/30 text-indigo-300 border-r border-indigo-500/30'
+                : 'bg-white/5 text-white/40 hover:bg-white/10 border-r border-white/10'
+            )}
+          >
+            <Moon className="w-3.5 h-3.5" /> Closing
+          </button>
+          <button
+            onClick={() => { setShift('wastage'); setQuantities({}); }}
+            className={cn(
+              'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition-all',
+              shift === 'wastage'
+                ? 'bg-red-500/30 text-red-300'
                 : 'bg-white/5 text-white/40 hover:bg-white/10'
             )}
           >
-            <Moon className="w-4 h-4" /> Closing
+            <Trash2 className="w-3.5 h-3.5" /> Wastage
           </button>
         </div>
       </div>
@@ -296,7 +315,8 @@ export default function DailyKitchenPage() {
                   return (
                     <div key={item.id} className={cn(
                       'px-4 py-3 bg-white/5 transition-colors',
-                      hasVal && shift === 'closing' && 'bg-indigo-500/10'
+                      hasVal && shift === 'closing' && 'bg-indigo-500/10',
+                      hasVal && shift === 'wastage' && 'bg-red-500/10',
                     )}>
                       <div className="flex items-center gap-3">
                         <div className="flex-1 min-w-0">
@@ -304,6 +324,11 @@ export default function DailyKitchenPage() {
                           {shift === 'in' && existing !== undefined && (
                             <p className="text-xs mt-0.5 font-medium text-amber-400/80">
                               ✓ logged today: {existing} {item.unit}
+                            </p>
+                          )}
+                          {shift === 'wastage' && existing !== undefined && (
+                            <p className="text-xs mt-0.5 font-medium text-red-400/80">
+                              ✓ wastage today: {existing} {item.unit}
                             </p>
                           )}
                           {shift === 'closing' && existing !== undefined && !hasVal && (
@@ -341,7 +366,7 @@ export default function DailyKitchenPage() {
                             {item.unit && <span className="text-xs text-white/40 w-6 text-right">{item.unit}</span>}
                           </div>
                         ) : (
-                          /* plain input for IN */
+                          /* plain input for IN / Wastage */
                           <div className="flex items-center gap-1.5 shrink-0">
                             <input
                               type="number"
@@ -354,7 +379,11 @@ export default function DailyKitchenPage() {
                               className={cn(
                                 'w-20 text-right rounded-xl px-3 py-1.5 text-sm font-medium outline-none',
                                 'bg-white/10 border text-white placeholder-white/30',
-                                hasVal ? 'border-amber-400 bg-amber-500/20' : 'border-white/20'
+                                hasVal
+                                  ? shift === 'wastage'
+                                    ? 'border-red-400 bg-red-500/20'
+                                    : 'border-amber-400 bg-amber-500/20'
+                                  : 'border-white/20'
                               )}
                             />
                             {item.unit && <span className="text-xs text-white/40 w-8">{item.unit}</span>}
@@ -380,13 +409,15 @@ export default function DailyKitchenPage() {
             filled > 0
               ? shift === 'in'
                 ? 'bg-amber-500 hover:bg-amber-400 text-white active:scale-[0.98]'
-                : 'bg-indigo-500 hover:bg-indigo-400 text-white active:scale-[0.98]'
+                : shift === 'wastage'
+                  ? 'bg-red-500 hover:bg-red-400 text-white active:scale-[0.98]'
+                  : 'bg-indigo-500 hover:bg-indigo-400 text-white active:scale-[0.98]'
               : 'bg-white/10 text-white/30 cursor-not-allowed'
           )}
         >
           {saving
             ? <span className="flex items-center justify-center gap-2"><div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving…</span>
-            : `Save ${shift === 'in' ? 'Morning IN' : 'Closing'}${filled > 0 ? ` (${filled})` : ''}`}
+            : `Save ${shift === 'in' ? 'Morning IN' : shift === 'wastage' ? 'Wastage' : 'Closing'}${filled > 0 ? ` (${filled})` : ''}`}
         </button>
       </div>
     </main>
