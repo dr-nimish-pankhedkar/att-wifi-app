@@ -111,6 +111,12 @@ export default function KioskPage() {
         <p className="text-white/30 text-xs text-center">
           Must be connected to office WiFi
         </p>
+        <Link
+          href="/admin"
+          className="text-white/20 hover:text-white/50 text-xs transition-colors"
+        >
+          Admin Login
+        </Link>
       </div>
 
       {successData && (
