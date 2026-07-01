@@ -10,8 +10,8 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 interface KitchenItem { id: string; name: string; unit: string; category: string; sort_order: number; }
-interface LogEntry    { item_id: string; shift: 'in' | 'closing'; quantity: number; }
-interface EntryRecord { item_id: string; shift: 'in' | 'closing'; quantity: number; created_at: string; logged_by_name: string | null; }
+interface LogEntry    { item_id: string; shift: 'in' | 'closing' | 'wastage'; quantity: number; }
+interface EntryRecord { item_id: string; shift: 'in' | 'closing' | 'wastage'; quantity: number; created_at: string; logged_by_name: string | null; }
 
 const DEFAULT_CATEGORIES = ['Vegetables', 'Grocery', 'Miscellaneous'];
 
@@ -342,6 +342,8 @@ export default function DailyKitchenAdminPage() {
   const [entries, setEntries]      = useState<EntryRecord[]>([]);
   const [loading, setLoading]      = useState(true);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [wastageEditing, setWastageEditing] = useState<string | null>(null);
+  const [wastageInput, setWastageInput]     = useState('');
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -376,7 +378,21 @@ export default function DailyKitchenAdminPage() {
     refreshTimer.current = setTimeout(() => { load(date, { silent: true }); }, 350);
   }, [load, date]);
 
-  const logMap: Record<string, { in?: number; closing?: number }> = {};
+  async function submitWastage(itemId: string) {
+    const qty = Number(wastageInput);
+    if (!wastageInput || isNaN(qty) || qty <= 0) { setWastageEditing(null); return; }
+    setWastageEditing(null);
+    setWastageInput('');
+    const res = await fetch('/api/daily-kitchen/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ log_date: date, shift: 'wastage', entries: [{ item_id: itemId, quantity: qty }] }),
+    });
+    if (res.ok) { toast.success('Wastage recorded'); refresh(); }
+    else { const d = await res.json(); toast.error(d.error ?? 'Failed to save wastage'); }
+  }
+
+  const logMap: Record<string, { in?: number; closing?: number; wastage?: number }> = {};
   for (const l of logs) {
     if (!logMap[l.item_id]) logMap[l.item_id] = {};
     logMap[l.item_id][l.shift] = l.quantity;
@@ -499,7 +515,7 @@ export default function DailyKitchenAdminPage() {
                     <div key={category}>
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1 mb-1">{category}</p>
                       <div className="rounded-xl border overflow-hidden overflow-x-auto">
-                        <table className="w-full text-sm min-w-[480px]">
+                        <table className="w-full text-sm min-w-[560px]">
                           <thead>
                             <tr className="bg-muted/50 text-muted-foreground">
                               <th className="text-left px-4 py-2 font-medium">Item</th>
@@ -507,6 +523,7 @@ export default function DailyKitchenAdminPage() {
                               <th className="text-center px-4 py-2 font-medium w-24">🌅 IN</th>
                               <th className="text-center px-4 py-2 font-medium w-24">🌙 Closing</th>
                               <th className="text-center px-4 py-2 font-medium w-28">📊 Consumed</th>
+                              <th className="text-center px-4 py-2 font-medium w-24">🗑 Wastage</th>
                               <th className="text-center px-3 py-2 font-medium w-16">Log</th>
                             </tr>
                           </thead>
@@ -538,6 +555,37 @@ export default function DailyKitchenAdminPage() {
                                           ? <span className="text-muted-foreground text-sm">{cons}</span>
                                           : <span className="inline-block px-2 py-0.5 rounded-md bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300 font-semibold text-sm">{cons}</span>}
                                     </td>
+                                    <td className="px-4 py-2.5 text-center">
+                                      {wastageEditing === item.id ? (
+                                        <div className="flex items-center justify-center gap-1">
+                                          <input
+                                            autoFocus
+                                            type="number"
+                                            min="0"
+                                            value={wastageInput}
+                                            onChange={e => setWastageInput(e.target.value)}
+                                            onKeyDown={e => {
+                                              if (e.key === 'Enter') submitWastage(item.id);
+                                              if (e.key === 'Escape') setWastageEditing(null);
+                                            }}
+                                            className="w-14 border border-red-300 rounded px-1.5 py-0.5 text-sm text-center focus:ring-1 ring-red-400 focus:outline-none"
+                                          />
+                                          <button onClick={() => submitWastage(item.id)} className="text-red-500 hover:text-red-700 font-bold text-sm">✓</button>
+                                          <button onClick={() => setWastageEditing(null)} className="text-muted-foreground hover:text-foreground text-sm">✕</button>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center justify-center gap-1.5">
+                                          {row.wastage !== undefined && (
+                                            <span className="font-semibold text-sm text-red-600">{row.wastage}</span>
+                                          )}
+                                          <button
+                                            onClick={() => { setWastageEditing(item.id); setWastageInput(row.wastage !== undefined ? String(row.wastage) : ''); }}
+                                            className="w-4 h-4 rounded-full bg-red-400 hover:bg-red-500 transition-colors flex-shrink-0"
+                                            title="Log wastage"
+                                          />
+                                        </div>
+                                      )}
+                                    </td>
                                     <td className="px-3 py-2.5 text-center">
                                       {itemEntries.length > 0 ? (
                                         <button
@@ -558,7 +606,7 @@ export default function DailyKitchenAdminPage() {
                                   </tr>
                                   {isExpanded && (
                                     <tr key={`${item.id}-history`} className="bg-muted/20">
-                                      <td colSpan={6} className="px-4 py-2">
+                                      <td colSpan={7} className="px-4 py-2">
                                         <div className="flex flex-col gap-1.5">
                                           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Activity Log</p>
                                           {itemEntries.map((entry, idx) => (
@@ -567,9 +615,11 @@ export default function DailyKitchenAdminPage() {
                                                 'shrink-0 px-1.5 py-0.5 rounded font-medium',
                                                 entry.shift === 'in'
                                                   ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
-                                                  : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300'
+                                                  : entry.shift === 'wastage'
+                                                    ? 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300'
+                                                    : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300'
                                               )}>
-                                                {entry.shift === 'in' ? '🌅 IN' : '🌙 Closing'}
+                                                {entry.shift === 'in' ? '🌅 IN' : entry.shift === 'wastage' ? '🗑 Waste' : '🌙 Closing'}
                                               </span>
                                               <span className="font-semibold tabular-nums">{entry.quantity} {item.unit}</span>
                                               <span className="text-muted-foreground">·</span>

@@ -14,8 +14,8 @@ export async function POST(request: NextRequest) {
   if (!body?.log_date || !body?.shift || !Array.isArray(body.entries)) {
     return NextResponse.json({ error: 'log_date, shift, and entries[] required' }, { status: 400 });
   }
-  if (!['in', 'closing'].includes(body.shift)) {
-    return NextResponse.json({ error: 'shift must be "in" or "closing"' }, { status: 400 });
+  if (!['in', 'closing', 'wastage'].includes(body.shift)) {
+    return NextResponse.json({ error: 'shift must be "in", "closing", or "wastage"' }, { status: 400 });
   }
 
   const supabase = createAdminClient();
@@ -61,8 +61,8 @@ export async function POST(request: NextRequest) {
 
   let rows = newRows;
 
-  // Morning IN is additive — add to whatever was already logged this shift
-  if (body.shift === 'in') {
+  // IN and Wastage are additive — add to whatever was already logged this shift
+  if (body.shift === 'in' || body.shift === 'wastage') {
     const { data: existing } = await supabase
       .from('daily_kitchen_logs')
       .select('item_id, quantity')
