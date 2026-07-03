@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   ShoppingCart, ClipboardList, Package, Settings2, Plus, Trash2, Pencil,
-  Check, X, ChevronDown, ChevronUp, MoveRight, GripVertical,
+  Check, X, ChevronDown, ChevronUp, MoveRight, GripVertical, Share2, FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { authFetch } from '@/lib/supabase/authFetch';
@@ -220,6 +220,67 @@ function ShoppingTabContent({ items, onRefresh }: { items: InventoryItem[]; onRe
 
   const namedVendorCount = vendors.filter(v => v !== 'No Vendor').length;
 
+  function buildListText() {
+    const date = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+    let msg = `🛒 Shopping List – ${date}\n`;
+    for (const vendor of vendors) {
+      const vItems = vendorMap[vendor];
+      if (!vItems || vItems.length === 0) continue;
+      msg += `\n🏪 ${vendor}\n`;
+      for (const item of vItems) {
+        const qty = item.latest?.quantity ?? null;
+        const diff = qty !== null ? item.min_level - qty : null;
+        const qtyStr = qty !== null ? `${qty} ${item.unit}` : 'never logged';
+        const needStr = diff !== null && diff > 0 ? ` (need +${diff})` : '';
+        msg += `• ${item.name} – ${qtyStr}${needStr}\n`;
+      }
+    }
+    return msg;
+  }
+
+  function shareWhatsApp() {
+    const text = buildListText();
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  }
+
+  function openPDF() {
+    const date = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+    let rows = '';
+    for (const vendor of vendors) {
+      const vItems = vendorMap[vendor];
+      if (!vItems || vItems.length === 0) continue;
+      const label = vendor === 'No Vendor' ? '— No Vendor' : `🏪 ${vendor}`;
+      rows += `<div class="vendor"><div class="vtitle">${label}</div><table><thead><tr><th>Item</th><th>Current</th><th>Need</th></tr></thead><tbody>`;
+      for (const item of vItems) {
+        const qty = item.latest?.quantity ?? null;
+        const diff = qty !== null ? item.min_level - qty : null;
+        const qtyStr = qty !== null ? `${qty} ${item.unit}` : '<em style="color:#999">never logged</em>';
+        const needStr = diff !== null && diff > 0 ? `<span class="need">+${diff} ${item.unit}</span>` : '—';
+        rows += `<tr><td>${item.name}</td><td>${qtyStr}</td><td>${needStr}</td></tr>`;
+      }
+      rows += '</tbody></table></div>';
+    }
+    const html = `<!DOCTYPE html><html><head><title>Shopping List – ${date}</title><style>
+      body{font-family:-apple-system,sans-serif;padding:24px;color:#111;max-width:700px;margin:0 auto}
+      h1{margin:0 0 4px;font-size:22px}
+      .sub{color:#666;font-size:14px;margin-bottom:24px}
+      .vendor{margin-bottom:20px}
+      .vtitle{font-size:14px;font-weight:700;background:#4f46e5;color:#fff;padding:6px 12px;border-radius:6px;margin-bottom:6px;display:inline-block}
+      table{width:100%;border-collapse:collapse}
+      th{text-align:left;font-size:11px;color:#888;padding:4px 8px;border-bottom:2px solid #e5e7eb;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+      td{padding:7px 8px;font-size:13px;border-bottom:1px solid #f3f4f6}
+      .need{color:#dc2626;font-weight:700}
+      @media print{@page{margin:1.2cm}button{display:none}}
+    </style></head><body>
+      <h1>🛒 Shopping List</h1>
+      <p class="sub">${date} · ${needed.length} item${needed.length !== 1 ? 's' : ''} to restock</p>
+      ${rows}
+      <script>window.onload=()=>{window.print()}<\/script>
+    </body></html>`;
+    const win = window.open('', '_blank');
+    if (win) { win.document.write(html); win.document.close(); }
+  }
+
   return (
     <div className="space-y-4">
       {needed.length === 0 && extraVendors.length === 0 ? (
@@ -234,6 +295,20 @@ function ShoppingTabContent({ items, onRefresh }: { items: InventoryItem[]; onRe
               {needed.length} item{needed.length !== 1 ? 's' : ''} to restock
               {namedVendorCount > 0 && ` · ${namedVendorCount} vendor${namedVendorCount !== 1 ? 's' : ''}`}
             </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={shareWhatsApp}
+                className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-green-300 text-green-700 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-900/40 transition-colors font-medium"
+              >
+                <Share2 className="w-3.5 h-3.5" /> WhatsApp
+              </button>
+              <button
+                onClick={openPDF}
+                className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:bg-muted transition-colors font-medium"
+              >
+                <FileText className="w-3.5 h-3.5" /> PDF
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {vendors.map((vendor, vi) => (
