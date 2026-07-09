@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminClient();
   let query = supabase
     .from('profiles')
-    .select('id, name, designation, photo_url, role, shift_id, last_date, created_at, shifts(id, name, start_time)')
+    .select('id, name, designation, photo_url, role, shift_id, last_date, date_of_joining, birthdate, created_at, shifts(id, name, start_time)')
     .eq('role', 'staff')
     .order('name');
 
