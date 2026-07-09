@@ -132,7 +132,7 @@ export default function StaffDetailPage() {
 
   const loadAll = useCallback(async () => {
     const [profileRes, salaryRes, leavesRes] = await Promise.all([
-      fetch(`/api/staff`).then((r) => r.json()),
+      fetch(`/api/staff?all=1`).then((r) => r.json()),
       fetch(`/api/staff/${id}/salary`).then((r) => r.json()),
       fetch(`/api/staff/${id}/leaves`).then((r) => r.json()),
     ]);
