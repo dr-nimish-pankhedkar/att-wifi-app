@@ -42,7 +42,8 @@ interface CounterLog {
   id: string; log_date: string;
   count_500: number; count_200: number; count_100: number;
   count_50: number; count_20: number; count_10: number;
-  total: number; logged_by_name: string | null;
+  total: number; cash_taken: number; cash_taken_by: string | null;
+  logged_by_name: string | null;
 }
 
 type Range    = 'today' | 'yesterday' | 'week' | 'month' | 'custom';
@@ -182,7 +183,9 @@ export default function AdminExpensesPage() {
   const allRows: CounterRow[] = logsAsc.map((log, idx) => {
     const opening = idx === 0 ? null : logsAsc[idx - 1].total;
     const cashOut = expensesByDate[log.log_date] ?? 0;
-    const cashIn  = opening !== null ? log.total + cashOut - opening : null;
+    const taken   = Number(log.cash_taken ?? 0);
+    // Cash IN = Closing - Opening + Expenses + Cash Taken (taken is also an outflow)
+    const cashIn  = opening !== null ? log.total + cashOut + taken - opening : null;
     return { ...log, opening, cashOut, cashIn };
   });
   // Filter to only show rows within the actual range (exclude the pre-fetched opening day)
@@ -358,7 +361,7 @@ export default function AdminExpensesPage() {
             )}
 
             <p className="text-xs text-muted-foreground mb-3">
-              Cash IN = Today&apos;s closing − Yesterday&apos;s closing + Expenses paid · reflects daily cash received
+              Cash IN = Closing − Opening + Expenses + Cash Taken · reflects daily cash received from sales
             </p>
 
             {counterLoading ? (
@@ -380,6 +383,7 @@ export default function AdminExpensesPage() {
                         <th className="text-right px-4 py-3 font-medium">Opening</th>
                         <th className="text-right px-4 py-3 font-medium text-green-700 dark:text-green-400">↑ Cash IN</th>
                         <th className="text-right px-4 py-3 font-medium text-red-700 dark:text-red-400">↓ Expenses</th>
+                        <th className="text-right px-4 py-3 font-medium text-orange-700 dark:text-orange-400">↓ Taken</th>
                         <th className="text-right px-4 py-3 font-medium text-emerald-700 dark:text-emerald-400">= Closing</th>
                         <th className="text-left px-4 py-3 font-medium">Logged by</th>
                         <th className="px-3 py-3 w-8"/>
@@ -403,6 +407,14 @@ export default function AdminExpensesPage() {
                               <td className="px-4 py-3 text-right tabular-nums">
                                 {row.cashOut > 0
                                   ? <span className="font-semibold text-red-700 dark:text-red-400">₹{row.cashOut.toLocaleString('en-IN')}</span>
+                                  : <span className="text-muted-foreground/40">—</span>}
+                              </td>
+                              <td className="px-4 py-3 text-right tabular-nums">
+                                {Number(row.cash_taken) > 0
+                                  ? <div>
+                                      <span className="font-semibold text-orange-700 dark:text-orange-400">₹{Number(row.cash_taken).toLocaleString('en-IN')}</span>
+                                      {row.cash_taken_by && <p className="text-xs text-muted-foreground">{row.cash_taken_by}</p>}
+                                    </div>
                                   : <span className="text-muted-foreground/40">—</span>}
                               </td>
                               <td className="px-4 py-3 text-right tabular-nums">
@@ -449,6 +461,7 @@ export default function AdminExpensesPage() {
                         <td className="px-4 py-3"/>
                         <td className="px-4 py-3 text-right tabular-nums text-green-700 dark:text-green-400">₹{totalCashIn.toLocaleString('en-IN')}</td>
                         <td className="px-4 py-3 text-right tabular-nums text-red-700 dark:text-red-400">₹{totalCashOut.toLocaleString('en-IN')}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-orange-700 dark:text-orange-400">₹{displayRows.reduce((s,r) => s + Number(r.cash_taken ?? 0), 0).toLocaleString('en-IN')}</td>
                         <td className="px-4 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-400">₹{latestClosing.toLocaleString('en-IN')}</td>
                         <td colSpan={2}/>
                       </tr>

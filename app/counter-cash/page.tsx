@@ -84,6 +84,8 @@ export default function CounterCashPage() {
   const [verifying, setVerifying] = useState(false);
   const [logDate, setLogDate]     = useState(todayIST);
   const [counts, setCounts]       = useState<Counts>(EMPTY_COUNTS);
+  const [cashTaken, setCashTaken] = useState('');
+  const [cashTakenBy, setCashTakenBy] = useState('');
   const [saving, setSaving]       = useState(false);
   const [saved, setSaved]         = useState(false);
 
@@ -107,7 +109,12 @@ export default function CounterCashPage() {
 
   async function handleSubmit() {
     setSaving(true);
-    const body: Record<string, unknown> = { log_date: logDate, staff_id: staff?.id };
+    const body: Record<string, unknown> = {
+      log_date: logDate,
+      staff_id: staff?.id,
+      cash_taken: parseFloat(cashTaken) || 0,
+      cash_taken_by: cashTakenBy.trim() || null,
+    };
     for (const d of DENOM_CONFIG) body[d.key] = counts[d.key];
     const res = await fetch('/api/counter-cash', {
       method: 'POST',
@@ -274,6 +281,34 @@ export default function CounterCashPage() {
               </div>
             );
           })}
+        </div>
+
+        {/* Cash Taken Home */}
+        <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl px-4 py-4 space-y-3">
+          <p className="text-orange-300 font-semibold text-sm">Cash Taken Home <span className="text-orange-300/50 font-normal">(optional)</span></p>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 font-bold">₹</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              min={0}
+              value={cashTaken}
+              onChange={e => setCashTaken(e.target.value)}
+              placeholder="0"
+              className={cn(
+                'w-full pl-7 pr-3 py-2.5 rounded-xl text-white font-bold text-lg outline-none transition-colors',
+                'bg-white/10 border placeholder-white/20',
+                parseFloat(cashTaken) > 0 ? 'border-orange-400 bg-orange-500/20' : 'border-white/20'
+              )}
+            />
+          </div>
+          <input
+            type="text"
+            value={cashTakenBy}
+            onChange={e => setCashTakenBy(e.target.value)}
+            placeholder="Taken by (e.g. Nimish)"
+            className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/30 text-sm outline-none"
+          />
         </div>
 
         {/* Total summary */}

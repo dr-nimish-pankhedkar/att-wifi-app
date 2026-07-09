@@ -29,6 +29,8 @@ export async function POST(request: NextRequest) {
     total += n * d.value;
   }
 
+  const cashTaken = Math.max(0, Number(body.cash_taken ?? 0));
+
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from('counter_cash_logs')
@@ -36,6 +38,8 @@ export async function POST(request: NextRequest) {
       log_date: body.log_date,
       ...counts,
       total,
+      cash_taken: cashTaken,
+      cash_taken_by: body.cash_taken_by ?? null,
       logged_by: body.staff_id ?? null,
       notes: body.notes ?? null,
       updated_at: new Date().toISOString(),
@@ -55,7 +59,7 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminClient();
   let query = supabase
     .from('counter_cash_logs')
-    .select('id, log_date, count_500, count_200, count_100, count_50, count_20_note, count_20_coin, count_10_note, count_10_coin, total, logged_by, notes, created_at, updated_at')
+    .select('id, log_date, count_500, count_200, count_100, count_50, count_20_note, count_20_coin, count_10_note, count_10_coin, total, cash_taken, cash_taken_by, logged_by, notes, created_at, updated_at')
     .order('log_date', { ascending: false })
     .limit(90);
 
