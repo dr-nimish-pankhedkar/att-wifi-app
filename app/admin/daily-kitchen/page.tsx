@@ -44,9 +44,13 @@ function todayIST() {
   return new Date().toLocaleString('en-CA', { timeZone: 'Asia/Kolkata' }).split(',')[0];
 }
 function shiftDate(date: string, days: number) {
-  const d = new Date(date + 'T00:00:00');
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
+  const [y, m, d] = date.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + days); // local date arithmetic — no UTC conversion
+  return [
+    dt.getFullYear(),
+    String(dt.getMonth() + 1).padStart(2, '0'),
+    String(dt.getDate()).padStart(2, '0'),
+  ].join('-');
 }
 function fmt(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
