@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('cash_expenses')
-    .select('id, amount, description, category, expense_date, created_at, profiles!staff_id(id, name)')
+    .select('id, amount, description, category, expense_date, created_at, staff_id')
     .order('expense_date', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(500);
@@ -67,9 +67,20 @@ export async function GET(request: NextRequest) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Fetch staff names separately (no FK constraint required)
+  const staffIds = [...new Set((data ?? []).map(e => e.staff_id).filter(Boolean))];
+  const nameMap: Record<string, string> = {};
+  if (staffIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, name')
+      .in('id', staffIds);
+    for (const p of profiles ?? []) nameMap[p.id] = p.name;
+  }
+
   const expenses = (data ?? []).map((e) => ({
     ...e,
-    staff_name: (e.profiles as unknown as { name: string } | null)?.name ?? 'Unknown',
+    staff_name: e.staff_id ? (nameMap[e.staff_id] ?? 'Unknown') : 'Unknown',
   }));
 
   return NextResponse.json({ expenses });
