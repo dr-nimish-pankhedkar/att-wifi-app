@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     logs: (data ?? []).map(l => ({
       ...l,
-      logged_by_name: (l.profiles as { name: string } | null)?.name ?? null,
+      logged_by_name: (l.profiles as unknown as { name: string } | null)?.name ?? null,
     })),
   });
 }
