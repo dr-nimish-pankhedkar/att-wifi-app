@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminClient();
   let query = supabase
     .from('counter_cash_logs')
-    .select('id, log_date, count_500, count_200, count_100, count_50, count_20, count_10, total, logged_by, notes, created_at, updated_at, profiles!logged_by(name)')
+    .select('id, log_date, count_500, count_200, count_100, count_50, count_20, count_10, total, logged_by, notes, created_at, updated_at')
     .order('log_date', { ascending: false })
     .limit(90);
 
@@ -54,10 +54,18 @@ export async function GET(request: NextRequest) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Fetch staff names separately (no FK constraint on logged_by)
+  const staffIds = [...new Set((data ?? []).map(l => l.logged_by).filter(Boolean))];
+  const nameMap: Record<string, string> = {};
+  if (staffIds.length > 0) {
+    const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', staffIds);
+    for (const p of profiles ?? []) nameMap[p.id] = p.name;
+  }
+
   return NextResponse.json({
     logs: (data ?? []).map(l => ({
       ...l,
-      logged_by_name: (l.profiles as unknown as { name: string } | null)?.name ?? null,
+      logged_by_name: l.logged_by ? (nameMap[l.logged_by] ?? null) : null,
     })),
   });
 }
