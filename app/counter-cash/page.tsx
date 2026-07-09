@@ -207,25 +207,25 @@ export default function CounterCashPage() {
                   <p className="text-white font-bold text-sm">₹{d.value}</p>
                   <p className="text-white/30 text-xs">note</p>
                 </div>
-                <div className="flex items-center gap-2 flex-1">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
                   <button onClick={() => setCount(d.key, count - 1)} disabled={count <= 0}
-                    className="w-9 h-9 rounded-xl bg-white/10 border border-white/20 text-white text-xl font-bold flex items-center justify-center active:scale-95 transition-all disabled:opacity-30"
+                    className="w-9 h-9 shrink-0 rounded-xl bg-white/10 border border-white/20 text-white text-xl font-bold flex items-center justify-center active:scale-95 transition-all disabled:opacity-30"
                   >−</button>
                   <input type="number" inputMode="numeric" min={0}
                     value={count === 0 ? '' : count}
                     onChange={e => setCount(d.key, parseInt(e.target.value || '0', 10))}
                     placeholder="0"
                     className={cn(
-                      'flex-1 text-center rounded-xl px-2 py-2 text-lg font-bold outline-none transition-colors',
+                      'w-0 flex-1 min-w-0 text-center rounded-xl px-1 py-2 text-lg font-bold outline-none transition-colors',
                       'bg-white/10 border text-white placeholder-white/20',
                       active ? 'border-emerald-400 bg-emerald-500/20' : 'border-white/20'
                     )}
                   />
                   <button onClick={() => setCount(d.key, count + 1)}
-                    className="w-9 h-9 rounded-xl bg-white/10 border border-white/20 text-white text-xl font-bold flex items-center justify-center active:scale-95 transition-all"
+                    className="w-9 h-9 shrink-0 rounded-xl bg-white/10 border border-white/20 text-white text-xl font-bold flex items-center justify-center active:scale-95 transition-all"
                   >+</button>
                 </div>
-                <div className="w-20 text-right shrink-0">
+                <div className="w-16 text-right shrink-0">
                   {sub > 0
                     ? <span className="text-emerald-300 font-semibold text-sm">₹{sub.toLocaleString('en-IN')}</span>
                     : <span className="text-white/20 text-sm">—</span>}
@@ -248,25 +248,25 @@ export default function CounterCashPage() {
                   <p className="text-white font-bold text-sm">₹{d.value}</p>
                   <p className="text-white/30 text-xs">coin</p>
                 </div>
-                <div className="flex items-center gap-2 flex-1">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
                   <button onClick={() => setCount(d.key, count - 1)} disabled={count <= 0}
-                    className="w-9 h-9 rounded-xl bg-white/10 border border-white/20 text-white text-xl font-bold flex items-center justify-center active:scale-95 transition-all disabled:opacity-30"
+                    className="w-9 h-9 shrink-0 rounded-xl bg-white/10 border border-white/20 text-white text-xl font-bold flex items-center justify-center active:scale-95 transition-all disabled:opacity-30"
                   >−</button>
                   <input type="number" inputMode="numeric" min={0}
                     value={count === 0 ? '' : count}
                     onChange={e => setCount(d.key, parseInt(e.target.value || '0', 10))}
                     placeholder="0"
                     className={cn(
-                      'flex-1 text-center rounded-xl px-2 py-2 text-lg font-bold outline-none transition-colors',
+                      'w-0 flex-1 min-w-0 text-center rounded-xl px-1 py-2 text-lg font-bold outline-none transition-colors',
                       'bg-white/10 border text-white placeholder-white/20',
                       active ? 'border-emerald-400 bg-emerald-500/20' : 'border-white/20'
                     )}
                   />
                   <button onClick={() => setCount(d.key, count + 1)}
-                    className="w-9 h-9 rounded-xl bg-white/10 border border-white/20 text-white text-xl font-bold flex items-center justify-center active:scale-95 transition-all"
+                    className="w-9 h-9 shrink-0 rounded-xl bg-white/10 border border-white/20 text-white text-xl font-bold flex items-center justify-center active:scale-95 transition-all"
                   >+</button>
                 </div>
-                <div className="w-20 text-right shrink-0">
+                <div className="w-16 text-right shrink-0">
                   {sub > 0
                     ? <span className="text-emerald-300 font-semibold text-sm">₹{sub.toLocaleString('en-IN')}</span>
                     : <span className="text-white/20 text-sm">—</span>}
