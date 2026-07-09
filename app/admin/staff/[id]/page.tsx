@@ -21,6 +21,7 @@ interface StaffProfile {
   photo_url: string | null;
   date_of_joining: string | null;
   birthdate: string | null;
+  last_date: string | null;
   aadhar_url: string | null;
   pan_url: string | null;
   shift_id: string | null;
@@ -113,7 +114,7 @@ export default function StaffDetailPage() {
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [profileForm, setProfileForm] = useState({ name: '', designation: '', date_of_joining: '', birthdate: '' });
+  const [profileForm, setProfileForm] = useState({ name: '', designation: '', date_of_joining: '', birthdate: '', last_date: '' });
   const [salaryForm, setSalaryForm] = useState({ base_pay: '', fuel_allowance: '', fixed_bonus: '' });
   const [overrideForm, setOverrideForm] = useState({ base_pay_override: '', fuel_override: '', bonus_override: '', notes: '' });
   const [showOverride, setShowOverride] = useState(false);
@@ -143,6 +144,7 @@ export default function StaffDetailPage() {
         designation: found.designation ?? '',
         date_of_joining: found.date_of_joining ?? '',
         birthdate: found.birthdate ?? '',
+        last_date: found.last_date ?? '',
       });
     }
     if (salaryRes.salary) {
@@ -306,7 +308,12 @@ export default function StaffDetailPage() {
               </div>
             )}
             <div>
-              <h2 className="text-xl font-bold">{profile?.name}</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-bold">{profile?.name}</h2>
+                {profile?.last_date && profile.last_date < new Date().toISOString().split('T')[0] && (
+                  <Badge variant="destructive" className="text-xs">Former</Badge>
+                )}
+              </div>
               <p className="text-sm text-muted-foreground">{profile?.designation ?? 'No designation'}</p>
             </div>
           </div>
@@ -343,6 +350,13 @@ export default function StaffDetailPage() {
                   <div>
                     <Label>Date of Birth</Label>
                     <Input type="date" value={profileForm.birthdate} onChange={(e) => setProfileForm({ ...profileForm, birthdate: e.target.value })} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-destructive">Last Working Date</Label>
+                    <Input type="date" value={profileForm.last_date} onChange={(e) => setProfileForm({ ...profileForm, last_date: e.target.value })} />
+                    <p className="text-xs text-muted-foreground mt-1">Staff won&apos;t appear after this date. Leave blank if active.</p>
                   </div>
                 </div>
                 {profileForm.date_of_joining && (

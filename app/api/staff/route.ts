@@ -4,18 +4,26 @@ import bcrypt from 'bcryptjs';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const auth = createClient();
   const { data: { user } } = await auth.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const includeInactive = new URL(request.url).searchParams.get('all') === '1';
+  const todayIST = new Date().toLocaleString('en-CA', { timeZone: 'Asia/Kolkata' }).split(',')[0];
+
   const supabase = createAdminClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from('profiles')
-    .select('id, name, designation, photo_url, role, shift_id, created_at, shifts(id, name, start_time)')
+    .select('id, name, designation, photo_url, role, shift_id, last_date, created_at, shifts(id, name, start_time)')
     .eq('role', 'staff')
     .order('name');
 
+  if (!includeInactive) {
+    query = query.or(`last_date.is.null,last_date.gte.${todayIST}`);
+  }
+
+  const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ staff: data });
 }

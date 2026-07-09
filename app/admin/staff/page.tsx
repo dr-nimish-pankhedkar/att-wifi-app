@@ -33,7 +33,7 @@ export default function StaffPage() {
   const loadData = useCallback((opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
     Promise.all([
-      fetch('/api/staff').then((r) => r.json()),
+      fetch('/api/staff?all=1').then((r) => r.json()),
       fetch('/api/shifts').then((r) => r.json()),
     ])
       .then(([staffData, shiftsData]) => {

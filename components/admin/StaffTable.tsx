@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Pencil, Trash2, Plus, Upload, Eye } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +39,7 @@ interface StaffMember {
   role: string;
   created_at: string;
   shift_id: string | null;
+  last_date: string | null;
   shifts: ShiftOption | null;
 }
 
@@ -159,8 +161,11 @@ export default function StaffTable({ staff, shifts, onRefresh }: StaffTableProps
             </tr>
           </thead>
           <tbody>
-            {staff.map((member) => (
-              <tr key={member.id} className="border-t hover:bg-muted/30 transition-colors">
+            {staff.map((member) => {
+              const todayStr = new Date().toISOString().split('T')[0];
+              const isFormer = !!member.last_date && member.last_date < todayStr;
+              return (
+              <tr key={member.id} className={`border-t hover:bg-muted/30 transition-colors ${isFormer ? 'opacity-50' : ''}`}>
                 <td className="px-4 py-3">
                   {member.photo_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -171,7 +176,12 @@ export default function StaffTable({ staff, shifts, onRefresh }: StaffTableProps
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3 font-medium">{member.name}</td>
+                <td className="px-4 py-3 font-medium">
+                  <div className="flex items-center gap-2">
+                    {member.name}
+                    {isFormer && <Badge variant="destructive" className="text-xs">Former</Badge>}
+                  </div>
+                </td>
                 <td className="px-4 py-3 text-muted-foreground">{member.designation ?? '—'}</td>
                 <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
                   {member.shifts ? (
@@ -206,7 +216,7 @@ export default function StaffTable({ staff, shifts, onRefresh }: StaffTableProps
                   </div>
                 </td>
               </tr>
-            ))}
+            );})}
           </tbody>
         </table>
         {!staff.length && (

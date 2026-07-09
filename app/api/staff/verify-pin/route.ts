@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   const supabase = createAdminClient();
   const { data: profiles, error } = await supabase
     .from('profiles')
-    .select('id, name, designation, photo_url, pin_hash, role');
+    .select('id, name, designation, photo_url, pin_hash, role, last_date');
 
   if (error || !profiles) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
@@ -30,6 +30,14 @@ export async function POST(request: NextRequest) {
 
   if (!found) {
     return NextResponse.json({ error: 'Incorrect PIN. Please try again.' }, { status: 401 });
+  }
+
+  // Block access if staff member's last date has passed
+  if (found.profile.last_date) {
+    const todayIST = new Date().toLocaleString('en-CA', { timeZone: 'Asia/Kolkata' }).split(',')[0];
+    if (found.profile.last_date < todayIST) {
+      return NextResponse.json({ error: 'Your employment has ended. Please contact the admin.' }, { status: 403 });
+    }
   }
 
   return NextResponse.json({
