@@ -552,10 +552,10 @@ const logMap: Record<string, { in?: number; closing?: number; wastage?: number }
                                         : <span className="text-muted-foreground/40">—</span>}
                                     </td>
                                     <td className="px-4 py-2.5 text-center">
-                                      {cons === undefined
+                                      {cons === undefined || cons < 0
                                         ? <span className="text-muted-foreground/40">—</span>
-                                        : cons <= 0
-                                          ? <span className="text-muted-foreground text-sm">{cons}</span>
+                                        : cons === 0
+                                          ? <span className="text-muted-foreground text-sm">0</span>
                                           : <span className="inline-block px-2 py-0.5 rounded-md bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300 font-semibold text-sm">{cons}</span>}
                                     </td>
                                     <td className="px-4 py-2.5 text-center">
