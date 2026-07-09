@@ -144,7 +144,6 @@ export async function GET(request: NextRequest) {
   const date = searchParams.get('date');
   if (!date) return NextResponse.json({ error: 'date required' }, { status: 400 });
 
-  const supabase = createAdminClient();
   const [{ data: logs, error }, { data: entries }] = await Promise.all([
     supabase
       .from('daily_kitchen_logs')
