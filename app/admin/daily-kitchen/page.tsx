@@ -372,11 +372,10 @@ export default function DailyKitchenAdminPage() {
 
   const load = useCallback(async (d: string, opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
-    const prev = shiftDate(d, -1);
     const [iRes, lRes, pRes] = await Promise.all([
       fetch('/api/daily-kitchen/items'),
       fetch(`/api/daily-kitchen/log?date=${d}`),
-      fetch(`/api/daily-kitchen/log?date=${prev}`),
+      fetch(`/api/daily-kitchen/log?closing-before=${d}`), // last known closing per item, any previous day
     ]);
     const { items: iData }           = await iRes.json();
     const { logs: lData, entries: eData } = await lRes.json();

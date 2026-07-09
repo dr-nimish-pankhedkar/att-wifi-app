@@ -96,12 +96,51 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ saved: data?.length ?? 0 });
 }
 
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().split('T')[0];
+}
+
 /**
  * GET — fetch logs for a date
- * ?date=YYYY-MM-DD
+ * ?date=YYYY-MM-DD           → logs + audit entries for that date
+ * ?closing-before=YYYY-MM-DD → most recent closing per item before that date (up to 60 days back)
+ *                               used to carry forward closing across holidays/off days
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
+  const closingBefore = searchParams.get('closing-before');
+
+  const supabase = createAdminClient();
+
+  // ── Carry-forward query: latest closing per item before a date ──
+  if (closingBefore) {
+    const lookbackFrom = addDays(closingBefore, -60);
+    const { data, error } = await supabase
+      .from('daily_kitchen_logs')
+      .select('item_id, quantity, log_date')
+      .eq('shift', 'closing')
+      .lt('log_date', closingBefore)
+      .gte('log_date', lookbackFrom)
+      .order('log_date', { ascending: false });
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // Keep only the most recent closing per item (data is sorted desc)
+    const seen = new Set<string>();
+    const latest = (data ?? []).filter(row => {
+      if (seen.has(row.item_id)) return false;
+      seen.add(row.item_id);
+      return true;
+    });
+
+    return NextResponse.json({
+      logs: latest.map(r => ({ item_id: r.item_id, shift: 'closing', quantity: r.quantity })),
+      entries: [],
+    });
+  }
+
   const date = searchParams.get('date');
   if (!date) return NextResponse.json({ error: 'date required' }, { status: 400 });
 
