@@ -2,7 +2,18 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
-const DENOMS = [500, 200, 100, 50, 20, 10] as const;
+type DenomKey = 'count_500' | 'count_200' | 'count_100' | 'count_50' | 'count_20_note' | 'count_20_coin' | 'count_10_note' | 'count_10_coin';
+
+const DENOM_CONFIG: Array<{ key: DenomKey; value: number }> = [
+  { key: 'count_500',     value: 500 },
+  { key: 'count_200',     value: 200 },
+  { key: 'count_100',     value: 100 },
+  { key: 'count_50',      value: 50  },
+  { key: 'count_20_note', value: 20  },
+  { key: 'count_20_coin', value: 20  },
+  { key: 'count_10_note', value: 10  },
+  { key: 'count_10_coin', value: 10  },
+];
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -12,10 +23,10 @@ export async function POST(request: NextRequest) {
 
   let total = 0;
   const counts: Record<string, number> = {};
-  for (const d of DENOMS) {
-    const n = Math.max(0, Math.floor(Number(body[`count_${d}`] ?? 0)));
-    counts[`count_${d}`] = n;
-    total += n * d;
+  for (const d of DENOM_CONFIG) {
+    const n = Math.max(0, Math.floor(Number(body[d.key] ?? 0)));
+    counts[d.key] = n;
+    total += n * d.value;
   }
 
   const supabase = createAdminClient();
@@ -44,7 +55,7 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminClient();
   let query = supabase
     .from('counter_cash_logs')
-    .select('id, log_date, count_500, count_200, count_100, count_50, count_20, count_10, total, logged_by, notes, created_at, updated_at')
+    .select('id, log_date, count_500, count_200, count_100, count_50, count_20_note, count_20_coin, count_10_note, count_10_coin, total, logged_by, notes, created_at, updated_at')
     .order('log_date', { ascending: false })
     .limit(90);
 
