@@ -120,6 +120,8 @@ export default function StaffDetailPage() {
   const [showOverride, setShowOverride] = useState(false);
   const [newLeave, setNewLeave] = useState({ leave_date: '', type: 'paid', notes: '' });
 
+  const [newPin, setNewPin] = useState('');
+  const [savingPin, setSavingPin] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingSalary, setSavingSalary] = useState(false);
   const [savingOverride, setSavingOverride] = useState(false);
@@ -191,6 +193,22 @@ export default function StaffDetailPage() {
       toast.success('Profile saved');
       setProfile((p) => p ? { ...p, ...profileForm } : p);
     } finally { setSavingProfile(false); }
+  }
+
+  async function savePin() {
+    if (!/^\d{4}$/.test(newPin)) { toast.error('PIN must be exactly 4 digits'); return; }
+    setSavingPin(true);
+    try {
+      const res = await fetch(`/api/staff/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: newPin }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error); return; }
+      toast.success('PIN updated');
+      setNewPin('');
+    } finally { setSavingPin(false); }
   }
 
   async function saveSalary() {
@@ -367,6 +385,27 @@ export default function StaffDetailPage() {
                 <Button onClick={saveProfile} disabled={savingProfile}>
                   <Save className="w-4 h-4 mr-2" />
                   {savingProfile ? 'Saving…' : 'Save Profile'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader><CardTitle className="text-base">Change PIN</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <div className="max-w-[200px]">
+                  <Label>New 4-digit PIN</Label>
+                  <Input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={newPin}
+                    onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    placeholder="····"
+                  />
+                </div>
+                <Button onClick={savePin} disabled={savingPin || newPin.length !== 4} variant="outline">
+                  <Save className="w-4 h-4 mr-2" />
+                  {savingPin ? 'Saving…' : 'Update PIN'}
                 </Button>
               </CardContent>
             </Card>

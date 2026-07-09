@@ -16,10 +16,8 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from('profiles')
     .select('id, name, designation, photo_url, role, shift_id, last_date, date_of_joining, birthdate, created_at, shifts(id, name, start_time)')
-    .eq('role', 'staff')
+    .in('role', ['staff', 'founder'])
     .order('name');
-
-  query = query.in('role', ['staff', 'founder']);
   if (!includeInactive) {
     query = query.or(`last_date.is.null,last_date.gte.${todayIST}`);
   }
@@ -65,7 +63,7 @@ export async function POST(request: NextRequest) {
     pin_hash,
     photo_url: body.photo_url ?? null,
     shift_id: body.shift_id ?? null,
-    role: 'staff',
+    role: ['staff', 'founder'].includes(body.role) ? body.role : 'staff',
   }).select().single();
 
   if (error) {
