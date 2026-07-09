@@ -13,7 +13,7 @@ const DENOM_CONFIG: Array<{ key: DenomKey; value: number; type: 'note' | 'coin' 
   { key: 'count_500',      value: 500, type: 'note' },
   { key: 'count_200',      value: 200, type: 'note' },
   { key: 'count_100',      value: 100, type: 'note' },
-  { key: 'count_50',       value: 50,  type: 'coin' },
+  { key: 'count_50',       value: 50,  type: 'note' },
   { key: 'count_20_note',  value: 20,  type: 'note' },
   { key: 'count_20_coin',  value: 20,  type: 'coin' },
   { key: 'count_10_note',  value: 10,  type: 'note' },
