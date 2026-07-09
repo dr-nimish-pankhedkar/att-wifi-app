@@ -616,7 +616,8 @@ const logMap: Record<string, { in?: number; closing?: number; wastage?: number }
                       <Clock className="w-4 h-4 text-muted-foreground" />
                       <span>Submission Log</span>
                       <span className="text-xs text-muted-foreground font-normal">
-                        {entries.length === 0 ? 'no entries today' : `${entries.length} submission${entries.length !== 1 ? 's' : ''}`}
+                        {fmt(date)}
+                        {entries.length > 0 && ` · ${entries.length} submission${entries.length !== 1 ? 's' : ''}`}
                       </span>
                     </div>
                     <span className="text-muted-foreground text-xs">{showFeed ? '▲ hide' : '▼ show'}</span>
