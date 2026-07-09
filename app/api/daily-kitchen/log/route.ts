@@ -18,6 +18,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'shift must be "in", "closing", or "wastage"' }, { status: 400 });
   }
 
+  const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+    ?? request.headers.get('x-real-ip')
+    ?? null;
+  const userAgent = request.headers.get('user-agent') ?? null;
+
   const supabase = createAdminClient();
 
   let loggedBy: string | null = body.staff_id ?? null;
@@ -54,8 +59,10 @@ export async function POST(request: NextRequest) {
       item_id:    r.item_id,
       log_date:   r.log_date,
       shift:      r.shift,
-      quantity:   r.quantity,   // original submitted amount, not cumulative
+      quantity:   r.quantity,
       logged_by:  r.logged_by,
+      ip_address: ipAddress,
+      user_agent: userAgent,
     }))
   );
 
@@ -106,7 +113,7 @@ export async function GET(request: NextRequest) {
       .eq('log_date', date),
     supabase
       .from('daily_kitchen_log_entries')
-      .select('item_id, shift, quantity, created_at, profiles!logged_by(name)')
+      .select('item_id, shift, quantity, created_at, ip_address, user_agent, profiles!logged_by(name)')
       .eq('log_date', date)
       .order('created_at', { ascending: true }),
   ]);

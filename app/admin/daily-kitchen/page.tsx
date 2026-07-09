@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 interface KitchenItem { id: string; name: string; unit: string; category: string; sort_order: number; }
 interface LogEntry    { item_id: string; shift: 'in' | 'closing' | 'wastage'; quantity: number; }
-interface EntryRecord { item_id: string; shift: 'in' | 'closing' | 'wastage'; quantity: number; created_at: string; logged_by_name: string | null; }
+interface EntryRecord { item_id: string; shift: 'in' | 'closing' | 'wastage'; quantity: number; created_at: string; logged_by_name: string | null; ip_address?: string | null; user_agent?: string | null; }
 
 const DEFAULT_CATEGORIES = ['Vegetables', 'Grocery', 'Miscellaneous'];
 
@@ -19,6 +19,23 @@ function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-IN', {
     hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata',
   });
+}
+
+function parseDevice(ua: string | null | undefined): string | null {
+  if (!ua) return null;
+  const os = /iPhone/.test(ua) ? 'iPhone'
+    : /iPad/.test(ua) ? 'iPad'
+    : /Android/.test(ua) ? 'Android'
+    : /Windows/.test(ua) ? 'Windows'
+    : /Macintosh|Mac OS X/.test(ua) ? 'Mac'
+    : /Linux/.test(ua) ? 'Linux'
+    : null;
+  const browser = /Edg\//.test(ua) ? 'Edge'
+    : /Chrome\//.test(ua) ? 'Chrome'
+    : /Firefox\//.test(ua) ? 'Firefox'
+    : /Safari\//.test(ua) ? 'Safari'
+    : null;
+  return [browser, os].filter(Boolean).join(' on ') || null;
 }
 
 type Tab = 'view' | 'manage';
@@ -631,25 +648,34 @@ const logMap: Record<string, { in?: number; closing?: number; wastage?: number }
                       <div className="divide-y text-sm">
                         {entries.map((entry, idx) => {
                           const item = items.find(i => i.id === entry.item_id);
+                          const device = parseDevice(entry.user_agent);
                           return (
-                            <div key={idx} className="flex items-center gap-3 px-4 py-2 hover:bg-muted/20">
-                              <span className="text-xs text-muted-foreground w-16 shrink-0 tabular-nums">{fmtTime(entry.created_at)}</span>
-                              <span className={cn(
-                                'shrink-0 px-1.5 py-0.5 rounded text-xs font-medium',
-                                entry.shift === 'in'
-                                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
-                                  : entry.shift === 'wastage'
-                                    ? 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300'
-                                    : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300'
-                              )}>
-                                {entry.shift === 'in' ? '🌅 IN' : entry.shift === 'wastage' ? '🗑 Waste' : '🌙 Closing'}
-                              </span>
-                              <span className="flex-1 font-medium truncate">{item?.name ?? entry.item_id}</span>
-                              <span className="font-semibold tabular-nums shrink-0">{entry.quantity} {item?.unit}</span>
-                              {entry.logged_by_name
-                                ? <span className="text-muted-foreground text-xs shrink-0 hidden sm:block">{entry.logged_by_name}</span>
-                                : <span className="text-muted-foreground/40 text-xs shrink-0 hidden sm:block">unknown</span>
-                              }
+                            <div key={idx} className="px-4 py-2 hover:bg-muted/20">
+                              <div className="flex items-center gap-3">
+                                <span className="text-xs text-muted-foreground w-16 shrink-0 tabular-nums">{fmtTime(entry.created_at)}</span>
+                                <span className={cn(
+                                  'shrink-0 px-1.5 py-0.5 rounded text-xs font-medium',
+                                  entry.shift === 'in'
+                                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+                                    : entry.shift === 'wastage'
+                                      ? 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300'
+                                      : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300'
+                                )}>
+                                  {entry.shift === 'in' ? '🌅 IN' : entry.shift === 'wastage' ? '🗑 Waste' : '🌙 Closing'}
+                                </span>
+                                <span className="flex-1 font-medium truncate">{item?.name ?? entry.item_id}</span>
+                                <span className="font-semibold tabular-nums shrink-0">{entry.quantity} {item?.unit}</span>
+                                <span className={cn('text-xs shrink-0', entry.logged_by_name ? 'text-muted-foreground font-medium' : 'text-muted-foreground/40')}>
+                                  {entry.logged_by_name ?? 'unknown'}
+                                </span>
+                              </div>
+                              {(entry.ip_address || device) && (
+                                <div className="flex items-center gap-2 mt-0.5 pl-[76px] text-xs text-muted-foreground/50">
+                                  {entry.ip_address && <span>IP {entry.ip_address}</span>}
+                                  {entry.ip_address && device && <span>·</span>}
+                                  {device && <span>{device}</span>}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
