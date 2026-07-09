@@ -14,6 +14,7 @@ interface StaffMember {
   role: string;
   created_at: string;
   shift_id: string | null;
+  last_date: string | null;
   shifts: { id: string; name: string; start_time: string } | null;
 }
 
