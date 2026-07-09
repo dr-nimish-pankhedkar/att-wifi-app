@@ -6,11 +6,11 @@
     },
     {
       "path": "/api/cron/daily-kitchen-report",
-      "schedule": "0 18 * * *"
+      "schedule": "30 17 * * *"
     },
     {
       "path": "/api/cron/weekly-stock-report",
-      "schedule": "0 18 * * 5"
+      "schedule": "30 17 * * 5"
     }
   ]
 }
