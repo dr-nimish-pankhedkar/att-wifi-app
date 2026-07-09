@@ -417,6 +417,8 @@ const logMap: Record<string, { in?: number; closing?: number; wastage?: number }
     items: items.filter(i => (i.category || 'Miscellaneous') === cat),
   }));
 
+  const [showFeed, setShowFeed] = useState(false);
+
   const TABS = [
     { id: 'view'   as Tab, label: 'Daily Log'   },
     { id: 'manage' as Tab, label: 'Manage Items' },
@@ -602,6 +604,57 @@ const logMap: Record<string, { in?: number; closing?: number; wastage?: number }
                       </div>
                     </div>
                   ))}
+                </div>
+
+                {/* ── Submission activity feed ── */}
+                <div className="rounded-xl border overflow-hidden mt-2">
+                  <button
+                    onClick={() => setShowFeed(f => !f)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 bg-muted/40 hover:bg-muted/60 transition-colors text-sm font-medium"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                      <span>Submission Log</span>
+                      <span className="text-xs text-muted-foreground font-normal">
+                        {entries.length === 0 ? 'no entries today' : `${entries.length} submission${entries.length !== 1 ? 's' : ''}`}
+                      </span>
+                    </div>
+                    <span className="text-muted-foreground text-xs">{showFeed ? '▲ hide' : '▼ show'}</span>
+                  </button>
+                  {showFeed && (
+                    entries.length === 0 ? (
+                      <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+                        No submissions recorded for {fmt(date)}
+                      </div>
+                    ) : (
+                      <div className="divide-y text-sm">
+                        {entries.map((entry, idx) => {
+                          const item = items.find(i => i.id === entry.item_id);
+                          return (
+                            <div key={idx} className="flex items-center gap-3 px-4 py-2 hover:bg-muted/20">
+                              <span className="text-xs text-muted-foreground w-16 shrink-0 tabular-nums">{fmtTime(entry.created_at)}</span>
+                              <span className={cn(
+                                'shrink-0 px-1.5 py-0.5 rounded text-xs font-medium',
+                                entry.shift === 'in'
+                                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+                                  : entry.shift === 'wastage'
+                                    ? 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300'
+                                    : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300'
+                              )}>
+                                {entry.shift === 'in' ? '🌅 IN' : entry.shift === 'wastage' ? '🗑 Waste' : '🌙 Closing'}
+                              </span>
+                              <span className="flex-1 font-medium truncate">{item?.name ?? entry.item_id}</span>
+                              <span className="font-semibold tabular-nums shrink-0">{entry.quantity} {item?.unit}</span>
+                              {entry.logged_by_name
+                                ? <span className="text-muted-foreground text-xs shrink-0 hidden sm:block">{entry.logged_by_name}</span>
+                                : <span className="text-muted-foreground/40 text-xs shrink-0 hidden sm:block">unknown</span>
+                              }
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )
+                  )}
                 </div>
               </>
             )}
