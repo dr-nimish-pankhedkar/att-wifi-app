@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, CheckCircle2, Delete } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Delete, Home } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type DenomKey = 'count_500' | 'count_200' | 'count_100' | 'count_50' | 'count_20_note' | 'count_20_coin' | 'count_10_note' | 'count_10_coin';
@@ -84,12 +84,14 @@ export default function CounterCashPage() {
   const [verifying, setVerifying] = useState(false);
   const [logDate, setLogDate]     = useState(todayIST);
   const [counts, setCounts]       = useState<Counts>(EMPTY_COUNTS);
-  const [cashTaken, setCashTaken] = useState('');
-  const [cashTakenBy, setCashTakenBy] = useState('');
-  const [saving, setSaving]       = useState(false);
-  const [saved, setSaved]         = useState(false);
+  const [saving, setSaving]       = useState<'counter' | 'taken_home' | null>(null);
+  const [savedType, setSavedType] = useState<'counter' | 'taken_home'>('counter');
 
   const total = DENOM_CONFIG.reduce((sum, d) => sum + counts[d.key] * d.value, 0);
+  const saved = saving === null && savedType !== null && total === 0 && counts === EMPTY_COUNTS;
+
+  const [isDone, setIsDone] = useState(false);
+  const [savedTotal, setSavedTotal] = useState(0);
 
   const handlePin = useCallback(async (pin: string) => {
     setVerifying(true);
@@ -107,13 +109,13 @@ export default function CounterCashPage() {
     setCounts(p => ({ ...p, [key]: Math.max(0, isNaN(value) ? 0 : value) }));
   }
 
-  async function handleSubmit() {
-    setSaving(true);
+  async function handleSubmit(entryType: 'counter' | 'taken_home') {
+    setSaving(entryType);
     const body: Record<string, unknown> = {
       log_date: logDate,
       staff_id: staff?.id,
-      cash_taken: parseFloat(cashTaken) || 0,
-      cash_taken_by: cashTakenBy.trim() || null,
+      entry_type: entryType,
+      cash_taken_by: entryType === 'taken_home' ? staff?.name : null,
     };
     for (const d of DENOM_CONFIG) body[d.key] = counts[d.key];
     const res = await fetch('/api/counter-cash', {
@@ -121,9 +123,11 @@ export default function CounterCashPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    setSaving(false);
+    setSaving(null);
     if (!res.ok) { toast.error((await res.json()).error ?? 'Failed'); return; }
-    setSaved(true);
+    setSavedTotal(total);
+    setSavedType(entryType);
+    setIsDone(true);
   }
 
   /* ── PIN screen ─────────────────────────────── */
@@ -149,16 +153,33 @@ export default function CounterCashPage() {
   }
 
   /* ── Success screen ──────────────────────────── */
-  if (saved) {
+  if (isDone) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-slate-900 via-emerald-950 to-slate-900 flex flex-col items-center justify-center gap-6 px-4">
-        <CheckCircle2 className="w-20 h-20 text-green-400" />
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-white">Saved!</h2>
-          <p className="text-white/60 mt-1">
-            ₹{total.toLocaleString('en-IN')} · {new Date(logDate + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}
-          </p>
-        </div>
+        {savedType === 'taken_home' ? (
+          <>
+            <div className="w-20 h-20 rounded-full bg-orange-500/20 flex items-center justify-center">
+              <Home className="w-10 h-10 text-orange-400" />
+            </div>
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-white">Taken Home!</h2>
+              <p className="text-white/60 mt-1">₹{savedTotal.toLocaleString('en-IN')} · {staff.name}</p>
+              <p className="text-white/40 text-sm mt-1">
+                {new Date(logDate + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            <CheckCircle2 className="w-20 h-20 text-green-400" />
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-white">Saved!</h2>
+              <p className="text-white/60 mt-1">
+                ₹{savedTotal.toLocaleString('en-IN')} · {new Date(logDate + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}
+              </p>
+            </div>
+          </>
+        )}
         <button onClick={() => router.push('/')}
           className="bg-white/10 border border-white/20 text-white rounded-xl px-8 py-3 font-medium hover:bg-white/20"
         >
@@ -169,8 +190,10 @@ export default function CounterCashPage() {
   }
 
   /* ── Form ────────────────────────────────────── */
+  const isFounder = staff.role === 'founder';
+
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-900 via-emerald-950 to-slate-900 pb-32">
+    <main className="min-h-screen bg-gradient-to-b from-slate-900 via-emerald-950 to-slate-900 pb-36">
       {/* Sticky header */}
       <div className="sticky top-0 z-20 bg-slate-900/90 backdrop-blur border-b border-white/10 px-4 py-3 flex items-center justify-between">
         <button onClick={() => router.push('/')} className="flex items-center gap-2 text-white/60 hover:text-white text-sm">
@@ -283,34 +306,6 @@ export default function CounterCashPage() {
           })}
         </div>
 
-        {/* Cash Taken Home — founders only */}
-        {staff.role === 'founder' && <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl px-4 py-4 space-y-3">
-          <p className="text-orange-300 font-semibold text-sm">Cash Taken Home <span className="text-orange-300/50 font-normal">(optional)</span></p>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 font-bold">₹</span>
-            <input
-              type="number"
-              inputMode="decimal"
-              min={0}
-              value={cashTaken}
-              onChange={e => setCashTaken(e.target.value)}
-              placeholder="0"
-              className={cn(
-                'w-full pl-7 pr-3 py-2.5 rounded-xl text-white font-bold text-lg outline-none transition-colors',
-                'bg-white/10 border placeholder-white/20',
-                parseFloat(cashTaken) > 0 ? 'border-orange-400 bg-orange-500/20' : 'border-white/20'
-              )}
-            />
-          </div>
-          <input
-            type="text"
-            value={cashTakenBy}
-            onChange={e => setCashTakenBy(e.target.value)}
-            placeholder="Taken by (e.g. Nimish)"
-            className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/30 text-sm outline-none"
-          />
-        </div>}
-
         {/* Total summary */}
         <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-5 py-4">
           <div className="flex items-center justify-between">
@@ -327,29 +322,75 @@ export default function CounterCashPage() {
             </div>
           )}
         </div>
+
+        {/* Founder hint */}
+        {isFounder && total > 0 && (
+          <p className="text-white/30 text-xs text-center px-4">
+            "Enter Cash" logs the counter closing balance · "Take Cash Home" records these denominations as cash you're taking
+          </p>
+        )}
       </div>
 
-      {/* Fixed submit */}
+      {/* Fixed action buttons */}
       <div className="fixed bottom-0 left-0 right-0 px-4 pb-6 pt-4 bg-gradient-to-t from-slate-900 via-slate-900/95 to-transparent">
-        <button
-          onClick={handleSubmit}
-          disabled={saving || total === 0}
-          className={cn(
-            'w-full rounded-2xl py-4 font-bold text-base transition-all',
-            total > 0
-              ? 'bg-emerald-500 hover:bg-emerald-400 text-white active:scale-[0.98]'
-              : 'bg-white/10 text-white/30 cursor-not-allowed'
-          )}
-        >
-          {saving
-            ? <span className="flex items-center justify-center gap-2">
-                <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Saving…
-              </span>
-            : total > 0
-              ? `Save · ₹${total.toLocaleString('en-IN')}`
-              : 'Enter at least one denomination'}
-        </button>
+        {isFounder ? (
+          <div className="flex gap-3">
+            <button
+              onClick={() => handleSubmit('taken_home')}
+              disabled={!!saving || total === 0}
+              className={cn(
+                'flex-1 rounded-2xl py-4 font-bold text-sm transition-all',
+                total > 0 && !saving
+                  ? 'bg-orange-500 hover:bg-orange-400 text-white active:scale-[0.98]'
+                  : 'bg-white/10 text-white/30 cursor-not-allowed'
+              )}
+            >
+              {saving === 'taken_home'
+                ? <span className="flex items-center justify-center gap-2">
+                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Saving…
+                  </span>
+                : total > 0 ? `🏠 Take Cash Home` : 'Take Cash Home'}
+            </button>
+            <button
+              onClick={() => handleSubmit('counter')}
+              disabled={!!saving || total === 0}
+              className={cn(
+                'flex-1 rounded-2xl py-4 font-bold text-sm transition-all',
+                total > 0 && !saving
+                  ? 'bg-emerald-500 hover:bg-emerald-400 text-white active:scale-[0.98]'
+                  : 'bg-white/10 text-white/30 cursor-not-allowed'
+              )}
+            >
+              {saving === 'counter'
+                ? <span className="flex items-center justify-center gap-2">
+                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Saving…
+                  </span>
+                : total > 0 ? `Enter Cash · ₹${total.toLocaleString('en-IN')}` : 'Enter at least one denomination'}
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => handleSubmit('counter')}
+            disabled={!!saving || total === 0}
+            className={cn(
+              'w-full rounded-2xl py-4 font-bold text-base transition-all',
+              total > 0
+                ? 'bg-emerald-500 hover:bg-emerald-400 text-white active:scale-[0.98]'
+                : 'bg-white/10 text-white/30 cursor-not-allowed'
+            )}
+          >
+            {saving
+              ? <span className="flex items-center justify-center gap-2">
+                  <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Saving…
+                </span>
+              : total > 0
+                ? `Save · ₹${total.toLocaleString('en-IN')}`
+                : 'Enter at least one denomination'}
+          </button>
+        )}
       </div>
     </main>
   );

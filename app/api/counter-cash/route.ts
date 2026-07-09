@@ -29,26 +29,57 @@ export async function POST(request: NextRequest) {
     total += n * d.value;
   }
 
-  const cashTaken = Math.max(0, Number(body.cash_taken ?? 0));
-
+  const entryType = body.entry_type === 'taken_home' ? 'taken_home' : 'counter';
   const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from('counter_cash_logs')
-    .upsert({
+
+  if (entryType === 'counter') {
+    // One counter entry per day — manual upsert
+    const { data: existing } = await supabase
+      .from('counter_cash_logs')
+      .select('id')
+      .eq('log_date', body.log_date)
+      .or('entry_type.eq.counter,entry_type.is.null')
+      .maybeSingle();
+
+    const payload = {
       log_date: body.log_date,
+      entry_type: 'counter',
       ...counts,
       total,
-      cash_taken: cashTaken,
-      cash_taken_by: body.cash_taken_by ?? null,
+      cash_taken: 0,
+      cash_taken_by: null,
       logged_by: body.staff_id ?? null,
       notes: body.notes ?? null,
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'log_date' })
-    .select()
-    .single();
+    };
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ log: data });
+    const { data, error } = existing
+      ? await supabase.from('counter_cash_logs').update(payload).eq('id', existing.id).select().single()
+      : await supabase.from('counter_cash_logs').insert(payload).select().single();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ log: data });
+  } else {
+    // Taken home — separate insert each time, records exact denominations taken
+    const { data, error } = await supabase
+      .from('counter_cash_logs')
+      .insert({
+        log_date: body.log_date,
+        entry_type: 'taken_home',
+        ...counts,
+        total,
+        cash_taken: total,
+        cash_taken_by: body.cash_taken_by ?? null,
+        logged_by: body.staff_id ?? null,
+        notes: body.notes ?? null,
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ log: data });
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -59,9 +90,10 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminClient();
   let query = supabase
     .from('counter_cash_logs')
-    .select('id, log_date, count_500, count_200, count_100, count_50, count_20_note, count_20_coin, count_10_note, count_10_coin, total, cash_taken, cash_taken_by, logged_by, notes, created_at, updated_at')
+    .select('id, log_date, entry_type, count_500, count_200, count_100, count_50, count_20_note, count_20_coin, count_10_note, count_10_coin, total, cash_taken, cash_taken_by, logged_by, notes, created_at, updated_at')
     .order('log_date', { ascending: false })
-    .limit(90);
+    .order('created_at', { ascending: false })
+    .limit(300);
 
   if (from) query = query.gte('log_date', from);
   if (to)   query = query.lte('log_date', to);
@@ -69,7 +101,6 @@ export async function GET(request: NextRequest) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Fetch staff names separately (no FK constraint on logged_by)
   const staffIds = [...new Set((data ?? []).map(l => l.logged_by).filter(Boolean))];
   const nameMap: Record<string, string> = {};
   if (staffIds.length > 0) {

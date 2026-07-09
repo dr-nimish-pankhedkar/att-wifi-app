@@ -31,7 +31,18 @@ const CAT_COLORS: Record<string, string> = {
   'Miscellaneous':       'bg-gray-100 text-gray-700',
 };
 
-const DENOMS = [500, 200, 100, 50, 20, 10] as const;
+const DENOM_KEYS: Array<{ key: string; label: string; value: number }> = [
+  { key: 'count_500',      label: '₹500',      value: 500 },
+  { key: 'count_200',      label: '₹200',      value: 200 },
+  { key: 'count_100',      label: '₹100',      value: 100 },
+  { key: 'count_50',       label: '₹50',       value: 50  },
+  { key: 'count_20_note',  label: '₹20 note',  value: 20  },
+  { key: 'count_20_coin',  label: '₹20 coin',  value: 20  },
+  { key: 'count_10_note',  label: '₹10 note',  value: 10  },
+  { key: 'count_10_coin',  label: '₹10 coin',  value: 10  },
+  { key: 'count_20',       label: '₹20',       value: 20  }, // legacy
+  { key: 'count_10',       label: '₹10',       value: 10  }, // legacy
+];
 
 interface Expense {
   id: string; amount: number; description: string;
@@ -39,11 +50,12 @@ interface Expense {
 }
 interface StaffMember { id: string; name: string; }
 interface CounterLog {
-  id: string; log_date: string;
-  count_500: number; count_200: number; count_100: number;
-  count_50: number; count_20: number; count_10: number;
+  id: string; log_date: string; entry_type: string | null;
+  count_500: number; count_200: number; count_100: number; count_50: number;
+  count_20_note: number; count_20_coin: number; count_10_note: number; count_10_coin: number;
+  count_20: number; count_10: number;
   total: number; cash_taken: number; cash_taken_by: string | null;
-  logged_by_name: string | null;
+  logged_by_name: string | null; created_at: string;
 }
 
 type Range    = 'today' | 'yesterday' | 'week' | 'month' | 'custom';
@@ -98,7 +110,7 @@ export default function AdminExpensesPage() {
 
   // Counter cash state
   const [counterLoading, setCounterLoading] = useState(false);
-  const [counterLogs, setCounterLogs]       = useState<CounterLog[]>([]);
+  const [allCounterLogs, setAllCounterLogs] = useState<CounterLog[]>([]);
   const [expandedDate, setExpandedDate]     = useState<string | null>(null);
 
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -130,7 +142,7 @@ export default function AdminExpensesPage() {
       const res = await authFetch(`/api/counter-cash?${params}`);
       const data = await res.json();
       if (!res.ok) { toast.error(data.error ?? 'Failed to load counter cash'); return; }
-      setCounterLogs(data.logs ?? []);
+      setAllCounterLogs(data.logs ?? []);
     } finally { setCounterLoading(false); }
   }, [range, customFrom, customTo]);
 
@@ -170,7 +182,16 @@ export default function AdminExpensesPage() {
   const catSorted = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
 
   // ── Counter cash computation ─────────────────────────────────
-  // counterLogs is sorted desc by date (from API), includes one extra day before range for opening
+  // Separate counter (closing balance) from taken_home (cash taken by founder)
+  const counterLogs = allCounterLogs.filter(l => !l.entry_type || l.entry_type === 'counter');
+  const takenHomeLogs = allCounterLogs.filter(l => l.entry_type === 'taken_home');
+
+  // Group taken_home events by date
+  const takenHomeByDate: Record<string, CounterLog[]> = {};
+  for (const t of takenHomeLogs) {
+    (takenHomeByDate[t.log_date] ??= []).push(t);
+  }
+
   // Group expenses by date for Cash OUT per day
   const expensesByDate: Record<string, number> = {};
   for (const e of expenses) {
@@ -179,14 +200,20 @@ export default function AdminExpensesPage() {
 
   // Build display rows: sorted asc to compute running opening, then reverse for display
   const logsAsc = [...counterLogs].reverse(); // asc by date
-  type CounterRow = CounterLog & { opening: number | null; cashOut: number; cashIn: number | null };
+  type CounterRow = CounterLog & {
+    opening: number | null; cashOut: number; cashIn: number | null;
+    takenHomeTotal: number; takenHomeEvents: CounterLog[];
+  };
   const allRows: CounterRow[] = logsAsc.map((log, idx) => {
     const opening = idx === 0 ? null : logsAsc[idx - 1].total;
     const cashOut = expensesByDate[log.log_date] ?? 0;
-    const taken   = Number(log.cash_taken ?? 0);
-    // Cash IN = Closing - Opening + Expenses + Cash Taken (taken is also an outflow)
-    const cashIn  = opening !== null ? log.total + cashOut + taken - opening : null;
-    return { ...log, opening, cashOut, cashIn };
+    const takenHomeEvents = takenHomeByDate[log.log_date] ?? [];
+    const takenHomeTotal = takenHomeEvents.reduce((s, t) => s + Number(t.total), 0);
+    // Include legacy cash_taken on counter entry for backward compat
+    const legacyTaken = Number(log.cash_taken ?? 0);
+    const totalTaken = legacyTaken + takenHomeTotal;
+    const cashIn = opening !== null ? log.total + cashOut + totalTaken - opening : null;
+    return { ...log, opening, cashOut, cashIn, takenHomeTotal: totalTaken, takenHomeEvents };
   });
   // Filter to only show rows within the actual range (exclude the pre-fetched opening day)
   const displayRows = allRows
@@ -361,7 +388,7 @@ export default function AdminExpensesPage() {
             )}
 
             <p className="text-xs text-muted-foreground mb-3">
-              Cash IN = Closing − Opening + Expenses + Cash Taken · reflects daily cash received from sales
+              Cash IN = Closing − Opening + Expenses + Cash Taken Home · reflects daily cash received from sales
             </p>
 
             {counterLoading ? (
@@ -410,10 +437,12 @@ export default function AdminExpensesPage() {
                                   : <span className="text-muted-foreground/40">—</span>}
                               </td>
                               <td className="px-4 py-3 text-right tabular-nums">
-                                {Number(row.cash_taken) > 0
+                                {row.takenHomeTotal > 0
                                   ? <div>
-                                      <span className="font-semibold text-orange-700 dark:text-orange-400">₹{Number(row.cash_taken).toLocaleString('en-IN')}</span>
-                                      {row.cash_taken_by && <p className="text-xs text-muted-foreground">{row.cash_taken_by}</p>}
+                                      <span className="font-semibold text-orange-700 dark:text-orange-400">₹{row.takenHomeTotal.toLocaleString('en-IN')}</span>
+                                      {row.takenHomeEvents.length > 0 && (
+                                        <p className="text-xs text-muted-foreground">{row.takenHomeEvents.map(t => t.cash_taken_by ?? t.logged_by_name ?? '?').filter((v, i, a) => a.indexOf(v) === i).join(', ')}</p>
+                                      )}
                                     </div>
                                   : <span className="text-muted-foreground/40">—</span>}
                               </td>
@@ -430,24 +459,57 @@ export default function AdminExpensesPage() {
                             </tr>
                             {isExpanded && (
                               <tr key={`${row.log_date}-detail`} className="bg-muted/20">
-                                <td colSpan={7} className="px-6 py-3">
-                                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Denomination Breakdown</p>
-                                  <div className="flex flex-wrap gap-3">
-                                    {DENOMS.filter(d => (row as unknown as Record<string, number>)[`count_${d}`] > 0).map(d => {
-                                      const count = (row as unknown as Record<string, number>)[`count_${d}`];
-                                      return (
-                                        <div key={d} className="flex items-center gap-1.5 bg-background border rounded-lg px-3 py-1.5">
-                                          <span className="text-xs text-muted-foreground">₹{d}</span>
-                                          <span className="text-xs font-bold">×{count}</span>
-                                          <span className="text-xs text-muted-foreground">=</span>
-                                          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">₹{(count*d).toLocaleString('en-IN')}</span>
-                                        </div>
-                                      );
-                                    })}
-                                    {DENOMS.every(d => (row as unknown as Record<string, number>)[`count_${d}`] === 0) && (
-                                      <span className="text-xs text-muted-foreground italic">No denominations recorded</span>
-                                    )}
+                                <td colSpan={8} className="px-6 py-4 space-y-4">
+                                  {/* Counter closing breakdown */}
+                                  <div>
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Counter Closing — Denomination Breakdown</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {DENOM_KEYS.filter(d => (row as unknown as Record<string, number>)[d.key] > 0).map(d => {
+                                        const count = (row as unknown as Record<string, number>)[d.key];
+                                        return (
+                                          <div key={d.key} className="flex items-center gap-1.5 bg-background border rounded-lg px-3 py-1.5">
+                                            <span className="text-xs text-muted-foreground">{d.label}</span>
+                                            <span className="text-xs font-bold">×{count}</span>
+                                            <span className="text-xs text-muted-foreground">=</span>
+                                            <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">₹{(count * d.value).toLocaleString('en-IN')}</span>
+                                          </div>
+                                        );
+                                      })}
+                                      {DENOM_KEYS.every(d => (row as unknown as Record<string, number>)[d.key] === 0) && (
+                                        <span className="text-xs text-muted-foreground italic">No denominations recorded</span>
+                                      )}
+                                    </div>
                                   </div>
+                                  {/* Taken home events */}
+                                  {row.takenHomeEvents.length > 0 && (
+                                    <div>
+                                      <p className="text-xs font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-wider mb-2">
+                                        🏠 Cash Taken Home ({row.takenHomeEvents.length} event{row.takenHomeEvents.length > 1 ? 's' : ''})
+                                      </p>
+                                      <div className="space-y-2">
+                                        {row.takenHomeEvents.map((evt, i) => (
+                                          <div key={evt.id} className="rounded-lg border border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 px-3 py-2">
+                                            <div className="flex items-center justify-between mb-1.5">
+                                              <span className="text-xs font-semibold text-orange-800 dark:text-orange-300">
+                                                {evt.cash_taken_by ?? evt.logged_by_name ?? `Event ${i + 1}`}
+                                              </span>
+                                              <span className="text-xs font-bold text-orange-700 dark:text-orange-400">₹{Number(evt.total).toLocaleString('en-IN')}</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                              {DENOM_KEYS.filter(d => (evt as unknown as Record<string, number>)[d.key] > 0).map(d => {
+                                                const count = (evt as unknown as Record<string, number>)[d.key];
+                                                return (
+                                                  <span key={d.key} className="text-xs bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded-full">
+                                                    {d.label}×{count}
+                                                  </span>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
                                 </td>
                               </tr>
                             )}
@@ -461,7 +523,7 @@ export default function AdminExpensesPage() {
                         <td className="px-4 py-3"/>
                         <td className="px-4 py-3 text-right tabular-nums text-green-700 dark:text-green-400">₹{totalCashIn.toLocaleString('en-IN')}</td>
                         <td className="px-4 py-3 text-right tabular-nums text-red-700 dark:text-red-400">₹{totalCashOut.toLocaleString('en-IN')}</td>
-                        <td className="px-4 py-3 text-right tabular-nums text-orange-700 dark:text-orange-400">₹{displayRows.reduce((s,r) => s + Number(r.cash_taken ?? 0), 0).toLocaleString('en-IN')}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-orange-700 dark:text-orange-400">₹{displayRows.reduce((s,r) => s + r.takenHomeTotal, 0).toLocaleString('en-IN')}</td>
                         <td className="px-4 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-400">₹{latestClosing.toLocaleString('en-IN')}</td>
                         <td colSpan={2}/>
                       </tr>
