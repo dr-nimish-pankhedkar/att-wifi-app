@@ -49,7 +49,7 @@ interface StaffTableProps {
   onRefresh: () => void;
 }
 
-const EMPTY_FORM = { name: '', designation: '', pin: '', photo_url: '', shift_id: '' };
+const EMPTY_FORM = { name: '', designation: '', pin: '', photo_url: '', shift_id: '', role: 'staff' };
 
 export function StaffTableSkeleton() {
   return (
@@ -97,6 +97,7 @@ export default function StaffTable({ staff, shifts, onRefresh }: StaffTableProps
             pin: form.pin || undefined,
             photo_url: form.photo_url || undefined,
             shift_id: form.shift_id || null,
+            role: form.role,
           }),
         });
         const data = await res.json();
@@ -136,6 +137,7 @@ export default function StaffTable({ staff, shifts, onRefresh }: StaffTableProps
       pin: '',
       photo_url: member.photo_url ?? '',
       shift_id: member.shift_id ?? '',
+      role: member.role ?? 'staff',
     });
     setShowAdd(true);
   }
@@ -179,6 +181,7 @@ export default function StaffTable({ staff, shifts, onRefresh }: StaffTableProps
                 <td className="px-4 py-3 font-medium">
                   <div className="flex items-center gap-2">
                     {member.name}
+                    {member.role === 'founder' && <Badge className="text-xs bg-amber-100 text-amber-800 border-amber-200">Founder</Badge>}
                     {isFormer && <Badge variant="destructive" className="text-xs">Former</Badge>}
                   </div>
                 </td>
@@ -247,6 +250,16 @@ export default function StaffTable({ staff, shifts, onRefresh }: StaffTableProps
                 maxLength={4}
                 inputMode="numeric"
               />
+            </div>
+            <div>
+              <Label>Role</Label>
+              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="staff">Staff</SelectItem>
+                  <SelectItem value="founder">Founder</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>Shift Assignment</Label>

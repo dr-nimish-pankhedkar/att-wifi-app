@@ -25,7 +25,7 @@ const EMPTY_COUNTS: Counts = {
   count_20_note: 0, count_20_coin: 0, count_10_note: 0, count_10_coin: 0,
 };
 
-interface StaffProfile { id: string; name: string; }
+interface StaffProfile { id: string; name: string; role: string; }
 
 function PinPad({ onSubmit, loading }: { onSubmit: (pin: string) => void; loading: boolean }) {
   const [pin, setPin] = useState('');
@@ -283,8 +283,8 @@ export default function CounterCashPage() {
           })}
         </div>
 
-        {/* Cash Taken Home */}
-        <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl px-4 py-4 space-y-3">
+        {/* Cash Taken Home — founders only */}
+        {staff.role === 'founder' && <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl px-4 py-4 space-y-3">
           <p className="text-orange-300 font-semibold text-sm">Cash Taken Home <span className="text-orange-300/50 font-normal">(optional)</span></p>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 font-bold">₹</span>
@@ -309,7 +309,7 @@ export default function CounterCashPage() {
             placeholder="Taken by (e.g. Nimish)"
             className="w-full px-3 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/30 text-sm outline-none"
           />
-        </div>
+        </div>}
 
         {/* Total summary */}
         <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-5 py-4">

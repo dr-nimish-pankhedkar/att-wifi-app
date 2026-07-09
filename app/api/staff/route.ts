@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     .eq('role', 'staff')
     .order('name');
 
+  query = query.in('role', ['staff', 'founder']);
   if (!includeInactive) {
     query = query.or(`last_date.is.null,last_date.gte.${todayIST}`);
   }

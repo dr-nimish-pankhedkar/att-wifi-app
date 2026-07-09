@@ -45,5 +45,6 @@ export async function POST(request: NextRequest) {
     name: found.profile.name,
     designation: found.profile.designation,
     photo_url: found.profile.photo_url,
+    role: found.profile.role,
   });
 }
