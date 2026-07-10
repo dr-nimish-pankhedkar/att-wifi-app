@@ -23,7 +23,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const today     = todayIST();
+  // Allow manual override: ?date=YYYY-MM-DD triggers a report for that specific date
+  const dateParam = new URL(request.url).searchParams.get('date');
+  const today     = dateParam ?? todayIST();
   const yesterday = shiftDate(today, -1);
   const supabase  = createAdminClient();
 
