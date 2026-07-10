@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
   const [itemsRes, logsRes, prevRes] = await Promise.all([
     supabase.from('daily_kitchen_items').select('id, name, unit').eq('active', true).order('sort_order'),
     supabase.from('daily_kitchen_logs')
-      .select('item_id, shift, quantity, profiles(name)')
+      .select('item_id, shift, quantity, logged_by')
       .eq('log_date', today),
     supabase.from('daily_kitchen_logs')
       .select('item_id, shift, quantity')
@@ -43,6 +43,14 @@ export async function GET(request: NextRequest) {
   const items = itemsRes.data ?? [];
   const logs  = logsRes.data  ?? [];
 
+  // Fetch logger names separately (no FK join)
+  const loggerIds = [...new Set(logs.map(l => l.logged_by).filter(Boolean))];
+  const nameMap: Record<string, string> = {};
+  if (loggerIds.length > 0) {
+    const { data: profiles } = await supabase.from('profiles').select('id, name').in('id', loggerIds);
+    for (const p of profiles ?? []) nameMap[p.id] = p.name;
+  }
+
   // Build today's IN/Closing map and collect logger names per shift
   const map: Record<string, { in?: number; closing?: number }> = {};
   const loggers: { in: Set<string>; closing: Set<string> } = { in: new Set(), closing: new Set() };
@@ -51,7 +59,7 @@ export async function GET(request: NextRequest) {
     const shift = l.shift as 'in' | 'closing';
     if (!map[l.item_id]) map[l.item_id] = {};
     map[l.item_id][shift] = l.quantity;
-    const name = (l.profiles as { name?: string } | null)?.name;
+    const name = l.logged_by ? nameMap[l.logged_by] : null;
     if (name) loggers[shift].add(name);
   }
 
