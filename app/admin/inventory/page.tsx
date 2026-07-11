@@ -80,7 +80,7 @@ function StockBadge({ item }: { item: InventoryItem }) {
 ══════════════════════════════════════════════════════════ */
 
 function ShoppingCard({
-  vendor, items, colorIdx, dragItemId, onDragStart, onDrop, onRemove,
+  vendor, items, colorIdx, dragItemId, onDragStart, onDrop, onRemove, onRefresh,
 }: {
   vendor: string;
   items: InventoryItem[];
@@ -89,9 +89,24 @@ function ShoppingCard({
   onDragStart: (id: string) => void;
   onDrop: (dragId: string, targetVendor: string) => void;
   onRemove?: () => void;
+  onRefresh: () => void;
 }) {
   const color = bucketColor(colorIdx);
   const [isOver, setIsOver] = useState(false);
+  const [editingMinId, setEditingMinId] = useState<string | null>(null);
+  const [minDraft, setMinDraft] = useState('');
+
+  async function saveMinLevel(item: InventoryItem) {
+    const val = Number(minDraft);
+    if (isNaN(val) || val < 0) { setEditingMinId(null); return; }
+    const res = await authFetch(`/api/inventory/${item.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ min_level: val }),
+    });
+    setEditingMinId(null);
+    if (!res.ok) { toast.error('Failed to update min level'); return; }
+    onRefresh();
+  }
 
   return (
     <div
@@ -126,8 +141,7 @@ function ShoppingCard({
         {items.length === 0 ? (
           <div className="px-4 py-6 text-center text-muted-foreground/50 text-xs">Drop items here</div>
         ) : items.map(item => {
-          const qty  = item.latest?.quantity ?? null;
-          const diff = qty !== null ? item.min_level - qty : null;
+          const qty = item.latest?.quantity ?? null;
           return (
             <div
               key={item.id}
@@ -143,17 +157,40 @@ function ShoppingCard({
                   <p className="text-xs text-muted-foreground">alt: {item.vendor_2}</p>
                 )}
               </div>
-              <div className="text-right text-sm shrink-0 ml-2">
+              <div className="text-right shrink-0 ml-2">
                 {qty !== null ? (
-                  <>
-                    <span className="text-red-600 font-medium">{qty} {item.unit}</span>
-                    {diff !== null && diff > 0 && (
-                      <span className="ml-1.5 text-xs text-red-700 font-semibold">need +{diff}</span>
-                    )}
-                  </>
+                  <p className="text-sm text-red-600 font-medium">{qty} {item.unit}</p>
                 ) : (
-                  <span className="text-amber-600 italic text-xs">never logged</span>
+                  <p className="text-xs text-amber-600 italic">never logged</p>
                 )}
+                <div className="flex items-center justify-end gap-0.5 mt-0.5">
+                  {editingMinId === item.id ? (
+                    <>
+                      <span className="text-xs text-muted-foreground">min:</span>
+                      <input
+                        type="number"
+                        value={minDraft}
+                        onChange={e => setMinDraft(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') saveMinLevel(item); if (e.key === 'Escape') setEditingMinId(null); }}
+                        onBlur={() => saveMinLevel(item)}
+                        className="w-14 border rounded px-1.5 py-0.5 text-xs text-right ml-1"
+                        autoFocus
+                      />
+                      <span className="text-xs text-muted-foreground">{item.unit}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xs text-muted-foreground">min: {item.min_level} {item.unit}</span>
+                      <button
+                        onClick={e => { e.stopPropagation(); setEditingMinId(item.id); setMinDraft(String(item.min_level)); }}
+                        className="p-0.5 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                        title="Edit min level"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           );
@@ -324,6 +361,7 @@ function ShoppingTabContent({ items, onRefresh }: { items: InventoryItem[]; onRe
                   ? () => setExtraVendors(prev => prev.filter(v => v !== vendor))
                   : undefined
                 }
+                onRefresh={onRefresh}
               />
             ))}
           </div>
