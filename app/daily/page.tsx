@@ -75,6 +75,7 @@ export default function DailyKitchenPage() {
   const [logDate, setLogDate]   = useState(todayIST);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [existingLogs, setExistingLogs] = useState<Record<string, number>>({});
+  const [prevClosing, setPrevClosing]   = useState<Record<string, number>>({});
   const [saving, setSaving]     = useState(false);
   const [saved, setSaved]       = useState(false);
 
@@ -87,30 +88,53 @@ export default function DailyKitchenPage() {
       .finally(() => setLoadingItems(false));
   }, [staff]);
 
-  // Load already-logged quantities for this shift+date.
-  // For Closing, pre-fill the form inputs so staff just adjusts from last value.
+  // Load logs for this shift+date. For Closing, also fetch the most recent
+  // previous closing so staff starts from yesterday's values and just adjusts.
   useEffect(() => {
     if (!staff) return;
-    fetch(`/api/daily-kitchen/log?date=${logDate}`)
-      .then(r => r.json())
-      .then(d => {
-        const map: Record<string, number> = {};
-        for (const l of (d.logs ?? []) as Array<{ item_id: string; shift: string; quantity: number }>) {
-          if (l.shift === shift) map[l.item_id] = l.quantity;
+
+    if (shift === 'closing') {
+      Promise.all([
+        fetch(`/api/daily-kitchen/log?date=${logDate}`).then(r => r.json()),
+        fetch(`/api/daily-kitchen/log?closing-before=${logDate}`).then(r => r.json()),
+      ]).then(([todayData, prevData]) => {
+        const todayClosing: Record<string, number> = {};
+        for (const l of (todayData.logs ?? []) as Array<{ item_id: string; shift: string; quantity: number }>) {
+          if (l.shift === 'closing') todayClosing[l.item_id] = l.quantity;
         }
-        setExistingLogs(map);
-        if (shift === 'closing') {
-          setQuantities(prev => {
-            const next = { ...prev };
-            for (const [itemId, qty] of Object.entries(map)) {
-              if (next[itemId] === undefined || next[itemId] === '') {
-                next[itemId] = String(qty);
-              }
-            }
-            return next;
-          });
+        setExistingLogs(todayClosing);
+
+        const prevMap: Record<string, number> = {};
+        for (const l of (prevData.logs ?? []) as Array<{ item_id: string; quantity: number }>) {
+          prevMap[l.item_id] = l.quantity;
         }
+        setPrevClosing(prevMap);
+
+        setQuantities(prev => {
+          const next = { ...prev };
+          // Apply yesterday's closing first (lower priority)
+          for (const [id, qty] of Object.entries(prevMap)) {
+            if (next[id] === undefined || next[id] === '') next[id] = String(qty);
+          }
+          // Today's already-saved closing wins over yesterday's
+          for (const [id, qty] of Object.entries(todayClosing)) {
+            next[id] = String(qty);
+          }
+          return next;
+        });
       });
+    } else {
+      setPrevClosing({});
+      fetch(`/api/daily-kitchen/log?date=${logDate}`)
+        .then(r => r.json())
+        .then(d => {
+          const map: Record<string, number> = {};
+          for (const l of (d.logs ?? []) as Array<{ item_id: string; shift: string; quantity: number }>) {
+            if (l.shift === shift) map[l.item_id] = l.quantity;
+          }
+          setExistingLogs(map);
+        });
+    }
   }, [staff, shift, logDate]);
 
   const handlePin = useCallback(async (pin: string) => {
@@ -331,9 +355,14 @@ export default function DailyKitchenPage() {
                               ✓ wastage today: {existing} {item.unit}
                             </p>
                           )}
-                          {shift === 'closing' && existing !== undefined && !hasVal && (
-                            <p className="text-xs mt-0.5 text-indigo-300/60">
-                              prev: {existing} {item.unit}
+                          {shift === 'closing' && existing !== undefined && (
+                            <p className="text-xs mt-0.5 font-medium text-indigo-300/70">
+                              ✓ saved today: {existing} {item.unit}
+                            </p>
+                          )}
+                          {shift === 'closing' && existing === undefined && prevClosing[item.id] !== undefined && (
+                            <p className="text-xs mt-0.5 text-white/25">
+                              yesterday: {prevClosing[item.id]} {item.unit}
                             </p>
                           )}
                         </div>
