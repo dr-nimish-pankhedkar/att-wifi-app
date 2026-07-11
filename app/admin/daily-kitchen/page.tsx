@@ -438,6 +438,52 @@ const logMap: Record<string, { in?: number; closing?: number; wastage?: number }
   }));
 
   const [showFeed, setShowFeed] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<{ in: string; closing: string; wastage: string }>({ in: '', closing: '', wastage: '' });
+  const [editSaving, setEditSaving] = useState(false);
+
+  function startEdit(itemId: string) {
+    const row = logMap[itemId] ?? {};
+    setEditingItemId(itemId);
+    setEditDraft({
+      in:      row.in      !== undefined ? String(row.in)      : '',
+      closing: row.closing !== undefined ? String(row.closing) : '',
+      wastage: row.wastage !== undefined ? String(row.wastage) : '',
+    });
+  }
+
+  async function saveEdit(itemId: string) {
+    const row = logMap[itemId] ?? {};
+    const calls: Promise<Response>[] = [];
+
+    for (const s of ['in', 'closing', 'wastage'] as const) {
+      const draft = editDraft[s];
+      const current = row[s];
+      const newQty = draft === '' ? 0 : Number(draft);
+      const unchanged = (draft === '' && current === undefined) ||
+                        (draft !== '' && !isNaN(newQty) && newQty === current);
+      if (unchanged) continue;
+      calls.push(
+        fetch('/api/daily-kitchen/log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            log_date: date, shift: s,
+            entries: [{ item_id: itemId, quantity: newQty }],
+            admin_override: true,
+          }),
+        })
+      );
+    }
+
+    if (calls.length === 0) { setEditingItemId(null); return; }
+    setEditSaving(true);
+    await Promise.all(calls);
+    setEditSaving(false);
+    setEditingItemId(null);
+    toast.success('Override saved');
+    refresh();
+  }
 
   const TABS = [
     { id: 'view'   as Tab, label: 'Daily Log'   },
@@ -530,7 +576,7 @@ const logMap: Record<string, { in?: number; closing?: number; wastage?: number }
                               <th className="text-center px-4 py-2 font-medium w-24">🌙 Closing</th>
                               <th className="text-center px-4 py-2 font-medium w-28">📊 Consumed</th>
                               <th className="text-center px-4 py-2 font-medium w-24">🗑 Wastage</th>
-                              <th className="text-center px-3 py-2 font-medium w-16">Log</th>
+                              <th className="text-center px-3 py-2 font-medium w-20">Log</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border">
@@ -538,9 +584,56 @@ const logMap: Record<string, { in?: number; closing?: number; wastage?: number }
                               const row  = logMap[item.id] ?? {};
                               const cons = getConsumption(item.id);
                               const itemEntries = entriesByItem[item.id] ?? [];
-                              const isExpanded = expandedItems.has(item.id);
+                              const isExpanded  = expandedItems.has(item.id);
+                              const isEditing   = editingItemId === item.id;
                               return (
                                 <React.Fragment key={item.id}>
+                                  {isEditing ? (
+                                    <tr className="bg-blue-50/60 dark:bg-blue-950/20">
+                                      <td className="px-4 py-2 font-medium text-sm">{item.name}</td>
+                                      <td className="px-3 py-2 text-center text-muted-foreground text-xs">{item.unit}</td>
+                                      <td className="px-2 py-2 text-center">
+                                        <input
+                                          type="number" min="0" step="any"
+                                          value={editDraft.in}
+                                          onChange={e => setEditDraft(p => ({ ...p, in: e.target.value }))}
+                                          placeholder="—"
+                                          className="w-16 border border-amber-300 rounded px-1.5 py-1 text-sm text-center bg-amber-50 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                                        />
+                                      </td>
+                                      <td className="px-2 py-2 text-center">
+                                        <input
+                                          type="number" min="0" step="any"
+                                          value={editDraft.closing}
+                                          onChange={e => setEditDraft(p => ({ ...p, closing: e.target.value }))}
+                                          placeholder="—"
+                                          className="w-16 border border-indigo-300 rounded px-1.5 py-1 text-sm text-center bg-indigo-50 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                        />
+                                      </td>
+                                      <td className="px-4 py-2 text-center text-muted-foreground/40 text-xs">recalc</td>
+                                      <td className="px-2 py-2 text-center">
+                                        <input
+                                          type="number" min="0" step="any"
+                                          value={editDraft.wastage}
+                                          onChange={e => setEditDraft(p => ({ ...p, wastage: e.target.value }))}
+                                          placeholder="—"
+                                          className="w-16 border border-red-300 rounded px-1.5 py-1 text-sm text-center bg-red-50 focus:outline-none focus:ring-1 focus:ring-red-400"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-2 text-center">
+                                        <div className="flex items-center justify-center gap-1">
+                                          <button onClick={() => saveEdit(item.id)} disabled={editSaving}
+                                            className="p-1.5 text-green-600 hover:bg-green-100 rounded transition-colors disabled:opacity-50">
+                                            <Check className="w-4 h-4" />
+                                          </button>
+                                          <button onClick={() => setEditingItemId(null)}
+                                            className="p-1.5 text-muted-foreground hover:bg-muted rounded transition-colors">
+                                            <X className="w-4 h-4" />
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ) : (
                                   <tr className="hover:bg-muted/30 transition-colors">
                                     <td className="px-4 py-2.5 font-medium">{item.name}</td>
                                     <td className="px-3 py-2.5 text-center text-muted-foreground text-xs">{item.unit}</td>
@@ -567,29 +660,40 @@ const logMap: Record<string, { in?: number; closing?: number; wastage?: number }
                                         : <span className="text-muted-foreground/40">—</span>}
                                     </td>
                                     <td className="px-3 py-2.5 text-center">
-                                      {itemEntries.length > 0 ? (
+                                      <div className="flex items-center justify-center gap-1">
+                                        {itemEntries.length > 0 ? (
+                                          <button
+                                            onClick={() => toggleHistory(item.id)}
+                                            className={cn(
+                                              'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium transition-colors',
+                                              isExpanded
+                                                ? 'bg-primary/10 text-primary'
+                                                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                                            )}>
+                                            <Clock className="w-3 h-3" />
+                                            {itemEntries.length}
+                                          </button>
+                                        ) : (
+                                          <span className="text-muted-foreground/30 text-xs w-8">—</span>
+                                        )}
                                         <button
-                                          onClick={() => toggleHistory(item.id)}
-                                          className={cn(
-                                            'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium transition-colors',
-                                            isExpanded
-                                              ? 'bg-primary/10 text-primary'
-                                              : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                                          )}>
-                                          <Clock className="w-3 h-3" />
-                                          {itemEntries.length}
+                                          onClick={() => startEdit(item.id)}
+                                          className="p-1 text-muted-foreground/40 hover:text-primary hover:bg-primary/5 rounded transition-colors"
+                                          title="Override log">
+                                          <Pencil className="w-3.5 h-3.5" />
                                         </button>
-                                      ) : (
-                                        <span className="text-muted-foreground/30 text-xs">—</span>
-                                      )}
+                                      </div>
                                     </td>
                                   </tr>
+                                  )}
                                   {isExpanded && (
                                     <tr key={`${item.id}-history`} className="bg-muted/20">
                                       <td colSpan={7} className="px-4 py-2">
                                         <div className="flex flex-col gap-1.5">
                                           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Activity Log</p>
-                                          {itemEntries.map((entry, idx) => (
+                                          {itemEntries.map((entry, idx) => {
+                                            const isOverride = entry.user_agent?.startsWith('[ADMIN OVERRIDE]');
+                                            return (
                                             <div key={idx} className="flex items-center gap-2 text-xs">
                                               <span className={cn(
                                                 'shrink-0 px-1.5 py-0.5 rounded font-medium',
@@ -602,6 +706,9 @@ const logMap: Record<string, { in?: number; closing?: number; wastage?: number }
                                                 {entry.shift === 'in' ? '🌅 IN' : entry.shift === 'wastage' ? '🗑 Waste' : '🌙 Closing'}
                                               </span>
                                               <span className="font-semibold tabular-nums">{entry.quantity} {item.unit}</span>
+                                              {isOverride && (
+                                                <span className="px-1 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300 font-medium">override</span>
+                                              )}
                                               <span className="text-muted-foreground">·</span>
                                               <span className="text-muted-foreground">{fmtTime(entry.created_at)}</span>
                                               {entry.logged_by_name && (
@@ -611,7 +718,8 @@ const logMap: Record<string, { in?: number; closing?: number; wastage?: number }
                                                 </>
                                               )}
                                             </div>
-                                          ))}
+                                            );
+                                          })}
                                         </div>
                                       </td>
                                     </tr>

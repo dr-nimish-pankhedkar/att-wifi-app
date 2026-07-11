@@ -41,8 +41,10 @@ export async function POST(request: NextRequest) {
     } catch { /* non-fatal */ }
   }
 
+  const isAdminOverride = !!body.admin_override;
+
   const newRows = (body.entries as Array<{ item_id: string; quantity: number }>)
-    .filter((e) => e.item_id && e.quantity !== undefined && e.quantity !== null && Number(e.quantity) > 0)
+    .filter((e) => e.item_id && e.quantity !== undefined && e.quantity !== null && (isAdminOverride ? Number(e.quantity) >= 0 : Number(e.quantity) > 0))
     .map((e) => ({
       item_id: e.item_id,
       quantity: Number(e.quantity),
@@ -53,7 +55,7 @@ export async function POST(request: NextRequest) {
 
   if (newRows.length === 0) return NextResponse.json({ saved: 0 });
 
-  // Always record individual submissions in the audit trail BEFORE accumulation
+  // Audit trail — mark admin overrides so history shows who changed what
   await supabase.from('daily_kitchen_log_entries').insert(
     newRows.map(r => ({
       item_id:    r.item_id,
@@ -62,9 +64,32 @@ export async function POST(request: NextRequest) {
       quantity:   r.quantity,
       logged_by:  r.logged_by,
       ip_address: ipAddress,
-      user_agent: userAgent,
+      user_agent: isAdminOverride ? `[ADMIN OVERRIDE] ${userAgent ?? ''}`.trim() : userAgent,
     }))
   );
+
+  // Admin override: bypass accumulation; quantity=0 deletes, quantity>0 directly upserts
+  if (isAdminOverride) {
+    const toDelete = newRows.filter(r => r.quantity === 0);
+    const toSet    = newRows.filter(r => r.quantity > 0);
+
+    if (toDelete.length > 0) {
+      await supabase.from('daily_kitchen_logs')
+        .delete()
+        .eq('log_date', body.log_date)
+        .eq('shift', body.shift)
+        .in('item_id', toDelete.map(r => r.item_id));
+    }
+
+    if (toSet.length > 0) {
+      const { error } = await supabase
+        .from('daily_kitchen_logs')
+        .upsert(toSet, { onConflict: 'item_id,log_date,shift' });
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ saved: newRows.length });
+  }
 
   let rows = newRows;
 
