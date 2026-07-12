@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, CheckCircle2, Delete, Home } from 'lucide-react';
@@ -86,12 +86,35 @@ export default function CounterCashPage() {
   const [counts, setCounts]       = useState<Counts>(EMPTY_COUNTS);
   const [saving, setSaving]       = useState<'counter' | 'taken_home' | null>(null);
   const [savedType, setSavedType] = useState<'counter' | 'taken_home'>('counter');
+  const [prefillDate, setPrefillDate] = useState<string | null>(null);
 
   const total = DENOM_CONFIG.reduce((sum, d) => sum + counts[d.key] * d.value, 0);
   const saved = saving === null && savedType !== null && total === 0 && counts === EMPTY_COUNTS;
 
   const [isDone, setIsDone] = useState(false);
   const [savedTotal, setSavedTotal] = useState(0);
+
+  // Pre-fill denomination counts from the most recent counter entry.
+  // If today's entry already exists, use it; otherwise use the last prior day's.
+  useEffect(() => {
+    if (!staff) return;
+    fetch(`/api/counter-cash?latest-on-or-before=${logDate}`)
+      .then(r => r.json())
+      .then(({ log }) => {
+        if (!log) return;
+        setCounts({
+          count_500:     log.count_500     ?? 0,
+          count_200:     log.count_200     ?? 0,
+          count_100:     log.count_100     ?? 0,
+          count_50:      log.count_50      ?? 0,
+          count_20_note: log.count_20_note ?? 0,
+          count_20_coin: log.count_20_coin ?? 0,
+          count_10_note: log.count_10_note ?? 0,
+          count_10_coin: log.count_10_coin ?? 0,
+        });
+        setPrefillDate(log.log_date);
+      });
+  }, [staff]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePin = useCallback(async (pin: string) => {
     setVerifying(true);
@@ -223,6 +246,15 @@ export default function CounterCashPage() {
             </p>
           </div>
         </div>
+
+        {/* Pre-fill hint */}
+        {prefillDate && (
+          <p className="text-white/30 text-xs text-center -mt-1">
+            {prefillDate === logDate
+              ? `✓ saved today · ₹${total.toLocaleString('en-IN')}`
+              : `pre-filled from ${new Date(prefillDate + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} · adjust as needed`}
+          </p>
+        )}
 
         {/* Notes section */}
         <p className="text-white/40 text-xs uppercase tracking-widest px-1">Notes</p>

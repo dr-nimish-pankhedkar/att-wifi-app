@@ -84,10 +84,27 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const from = searchParams.get('from');
-  const to   = searchParams.get('to');
+  const from             = searchParams.get('from');
+  const to               = searchParams.get('to');
+  const latestOnOrBefore = searchParams.get('latest-on-or-before');
 
   const supabase = createAdminClient();
+
+  // Single-record lookup: most recent counter entry on or before a date.
+  // Returns today's saved entry if it exists, otherwise the most recent prior day.
+  if (latestOnOrBefore) {
+    const { data, error } = await supabase
+      .from('counter_cash_logs')
+      .select('log_date, entry_type, count_500, count_200, count_100, count_50, count_20_note, count_20_coin, count_10_note, count_10_coin, total')
+      .or('entry_type.eq.counter,entry_type.is.null')
+      .lte('log_date', latestOnOrBefore)
+      .order('log_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ log: data });
+  }
+
   let query = supabase
     .from('counter_cash_logs')
     .select('id, log_date, entry_type, count_500, count_200, count_100, count_50, count_20_note, count_20_coin, count_10_note, count_10_coin, total, cash_taken, cash_taken_by, logged_by, notes, created_at, updated_at')
