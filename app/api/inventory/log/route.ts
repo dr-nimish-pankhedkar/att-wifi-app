@@ -37,16 +37,35 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ saved: 0 });
   }
 
-  const itemIds = rows.map((r) => r.item_id);
+  // Fetch existing values so we only touch rows that actually changed.
+  // This preserves created_at (the "last updated" timestamp) for unchanged items.
+  const { data: existing } = await supabase
+    .from('inventory_logs')
+    .select('item_id, quantity, notes')
+    .eq('log_date', body.log_date)
+    .in('item_id', rows.map((r) => r.item_id));
+
+  const existingMap: Record<string, { quantity: number; notes: string | null }> = {};
+  for (const e of existing ?? []) existingMap[e.item_id] = { quantity: Number(e.quantity), notes: e.notes };
+
+  const changedRows = rows.filter((r) => {
+    const ex = existingMap[r.item_id];
+    if (!ex) return true;
+    return ex.quantity !== Number(r.quantity) || ex.notes !== (r.notes ?? null);
+  });
+
+  if (changedRows.length === 0) return NextResponse.json({ saved: 0 });
+
+  const changedIds = changedRows.map((r) => r.item_id);
   await supabase
     .from('inventory_logs')
     .delete()
     .eq('log_date', body.log_date)
-    .in('item_id', itemIds);
+    .in('item_id', changedIds);
 
   const { data, error } = await supabase
     .from('inventory_logs')
-    .insert(rows)
+    .insert(changedRows)
     .select();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
