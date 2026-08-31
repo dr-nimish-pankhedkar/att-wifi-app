@@ -251,16 +251,25 @@ export default function DashboardPage() {
   // ── Monthly stats ──────────────────────────────────────────────────────
   const stats = staff.map((s) => {
     const recs = monthRecords.filter((r) => r.staff_id === s.id);
-    const workingDays = dayNumbers.filter((d) => {
-      const ds = `${monthStr}-${String(d).padStart(2, '0')}`;
-      const dow = new Date(ds + 'T12:00:00').getDay();
-      return !offDays.includes(dow) && !holidayDates.has(ds) && ds <= todayStr;
-    }).length;
-    const present = recs.filter((r) => r.status !== 'absent').length;
-    const onTime = recs.filter((r) => r.status === 'present').length;
-    const late = recs.filter((r) => r.status === 'late').length;
-    const absent = workingDays - present;
-    const halfDays = recs.filter((r) => r.half_day).length;
+
+    // Build a set of working-day date strings so we never count records on
+    // off days or holidays in the present/absent tallies.
+    const workingDates = new Set(
+      dayNumbers
+        .map(d => `${monthStr}-${String(d).padStart(2, '0')}`)
+        .filter(ds => {
+          const dow = new Date(ds + 'T12:00:00').getDay();
+          return !offDays.includes(dow) && !holidayDates.has(ds) && ds <= todayStr;
+        })
+    );
+    const workingDays = workingDates.size;
+    const workingRecs = recs.filter(r => workingDates.has(r.date));
+
+    const present  = workingRecs.filter((r) => r.status !== 'absent').length;
+    const onTime   = workingRecs.filter((r) => r.status === 'present').length;
+    const late     = workingRecs.filter((r) => r.status === 'late').length;
+    const absent   = workingDays - present;
+    const halfDays = workingRecs.filter((r) => r.half_day).length;
     const checkIns = recs.filter((r) => r.check_in_time).map((r) => toLocalTime(r.check_in_time));
     return { ...s, workingDays, present, onTime, late, absent: Math.max(0, absent), halfDays, checkIns };
   });
