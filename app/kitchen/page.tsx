@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { CloudOff, LogOut, Volume2 } from 'lucide-react';
 import PosLogin from '@/components/pos/PosLogin';
+import QuickNav from '@/components/pos/QuickNav';
+import { usePosLive } from '@/lib/pos/useLive';
 import { cn } from '@/lib/utils';
 import { getSession, isNetworkError, posApi, SessionExpired, setSession, type StoredSession } from '@/lib/pos/client';
 import { SOURCE_LABEL, type KotStatus, type OrderSource } from '@/lib/pos/types';
@@ -11,7 +13,7 @@ import { SOURCE_LABEL, type KotStatus, type OrderSource } from '@/lib/pos/types'
 interface TicketItem { id: string; name: string; variation_name: string | null; addons: { name: string }[]; qty: number; note: string | null; kot_status: KotStatus }
 interface Ticket { key: string; order_id: string; bill_no: number; source: OrderSource; table: string | null; customer_name: string | null; round: number; created_at: string; items: TicketItem[] }
 
-const POLL_MS = 4000;
+const FALLBACK_POLL_MS = 6000;
 
 function beep() {
   try {
@@ -67,12 +69,13 @@ export default function KitchenPage() {
   useEffect(() => {
     if (!session || !started) return;
     load();
-    const t = setInterval(load, POLL_MS);
     const clock = setInterval(() => setNow(Date.now()), 30000);
     const vis = () => { if (document.visibilityState === 'visible') { keepAwake(); load(); } };
     document.addEventListener('visibilitychange', vis);
-    return () => { clearInterval(t); clearInterval(clock); document.removeEventListener('visibilitychange', vis); wakeLock.current?.release().catch(() => {}); };
+    return () => { clearInterval(clock); document.removeEventListener('visibilitychange', vis); wakeLock.current?.release().catch(() => {}); };
   }, [session, started, load]);
+
+  usePosLive(load, !!session && started, FALLBACK_POLL_MS);
 
   async function move(t: Ticket, kot_status: 'preparing' | 'ready' | 'served') {
     setTickets((cur) => cur.map((x) => x.key !== t.key ? x : {
@@ -108,7 +111,10 @@ export default function KitchenPage() {
   return (
     <main className="min-h-screen bg-stone-900 text-white">
       <header className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-        <h1 className="font-bold text-lg">Kitchen orders</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="font-bold text-lg">Kitchen orders</h1>
+          <QuickNav dark />
+        </div>
         <div className="flex items-center gap-3 text-sm">
           {!online && <span className="flex items-center gap-1 text-red-400"><CloudOff className="w-4 h-4" /> No internet — retrying</span>}
           <span className="text-white/50">{session.staff.name}</span>

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { ArrowLeft, ChevronDown, ChevronUp, CheckCircle2, Delete } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UI, getLang, setLang, itemName, type Lang } from '@/lib/lang';
+import QuickNav from '@/components/pos/QuickNav';
 
 /* ── Types ────────────────────────────────────────── */
 
@@ -276,6 +277,7 @@ export default function StaffInventoryPage() {
   if (!staff) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-slate-900 via-blue-950 to-slate-900 flex flex-col items-center justify-between px-4 py-8">
+        <QuickNav dark className="justify-center w-full py-2" />
         <div className="w-full flex items-center justify-between">
           <button onClick={() => router.push('/')} className="flex items-center gap-2 text-white/60 hover:text-white text-sm">
             <ArrowLeft className="w-4 h-4" /> {t.back}
@@ -299,6 +301,7 @@ export default function StaffInventoryPage() {
   if (saved) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-slate-900 via-blue-950 to-slate-900 flex flex-col items-center justify-center gap-6 px-4">
+        <QuickNav dark className="justify-center w-full py-2" />
         <CheckCircle2 className="w-20 h-20 text-green-400" />
         <div className="text-center">
           <h2 className="text-2xl font-bold text-white">{t.saved}</h2>
@@ -317,6 +320,7 @@ export default function StaffInventoryPage() {
   /* ── Stock check form ────────────────────────── */
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-900 via-blue-950 to-slate-900 pb-32">
+        <QuickNav dark className="justify-center w-full py-2" />
       <div className="sticky top-0 z-20 bg-slate-900/90 backdrop-blur border-b border-white/10 px-4 py-3 flex items-center justify-between">
         <button onClick={() => router.push('/')} className="flex items-center gap-2 text-white/60 hover:text-white text-sm">
           <ArrowLeft className="w-4 h-4" /> {t.back}

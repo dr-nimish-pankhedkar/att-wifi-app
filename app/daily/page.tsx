@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, CheckCircle2, Delete, Sun, Moon, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import QuickNav from '@/components/pos/QuickNav';
 
 interface StaffProfile { id: string; name: string; }
 interface KitchenItem  { id: string; name: string; unit: string; category: string; }
@@ -195,6 +196,7 @@ export default function DailyKitchenPage() {
   if (!staff) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-slate-900 via-teal-950 to-slate-900 flex flex-col items-center justify-between px-4 py-8">
+        <QuickNav dark className="justify-center w-full py-2" />
         <div className="w-full">
           <button onClick={() => router.push('/')} className="flex items-center gap-2 text-white/60 hover:text-white text-sm">
             <ArrowLeft className="w-4 h-4" /> Back
@@ -217,6 +219,7 @@ export default function DailyKitchenPage() {
   if (saved) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-slate-900 via-teal-950 to-slate-900 flex flex-col items-center justify-center gap-6 px-4">
+        <QuickNav dark className="justify-center w-full py-2" />
         <CheckCircle2 className="w-20 h-20 text-green-400" />
         <div className="text-center">
           <h2 className="text-2xl font-bold text-white">Saved!</h2>
@@ -252,6 +255,7 @@ export default function DailyKitchenPage() {
   /* ── Form ────────────────────────────────────── */
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-900 via-teal-950 to-slate-900 pb-32">
+        <QuickNav dark className="justify-center w-full py-2" />
       {/* Sticky header */}
       <div className="sticky top-0 z-20 bg-slate-900/90 backdrop-blur border-b border-white/10 px-4 py-3 flex items-center justify-between">
         <button onClick={() => router.push('/')} className="flex items-center gap-2 text-white/60 hover:text-white text-sm">

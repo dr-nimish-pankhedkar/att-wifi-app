@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { bad, requirePosAdmin, requirePosUser, unauthorized } from '@/lib/pos/auth';
 import { saveMenuItem } from '@/lib/pos/saveMenuItem';
+import { clearMenuCache } from '@/lib/pos/menu';
+import { notifyPos } from '@/lib/pos/notify';
 
 /**
  * PATCH — admins edit anything. Any logged-in staff may flip only `in_stock`
@@ -19,6 +21,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
   const res = await saveMenuItem(createAdminClient(), params.id, body);
   if (res.error) return bad(res.error);
+  clearMenuCache();
+  await notifyPos('menu');
   return NextResponse.json({ id: res.id });
 }
 

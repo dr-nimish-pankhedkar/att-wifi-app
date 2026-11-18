@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, CheckCircle2, Delete, Home } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import QuickNav from '@/components/pos/QuickNav';
 
 type DenomKey = 'count_500' | 'count_200' | 'count_100' | 'count_50' | 'count_20_note' | 'count_20_coin' | 'count_10_note' | 'count_10_coin';
 type Counts = Record<DenomKey, number>;
@@ -157,6 +158,7 @@ export default function CounterCashPage() {
   if (!staff) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-slate-900 via-emerald-950 to-slate-900 flex flex-col items-center justify-between px-4 py-8">
+        <QuickNav dark className="justify-center w-full py-2" />
         <div className="w-full">
           <button onClick={() => router.push('/')} className="flex items-center gap-2 text-white/60 hover:text-white text-sm">
             <ArrowLeft className="w-4 h-4" /> Back
@@ -179,6 +181,7 @@ export default function CounterCashPage() {
   if (isDone) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-slate-900 via-emerald-950 to-slate-900 flex flex-col items-center justify-center gap-6 px-4">
+        <QuickNav dark className="justify-center w-full py-2" />
         {savedType === 'taken_home' ? (
           <>
             <div className="w-20 h-20 rounded-full bg-orange-500/20 flex items-center justify-center">
@@ -217,6 +220,7 @@ export default function CounterCashPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-900 via-emerald-950 to-slate-900 pb-36">
+        <QuickNav dark className="justify-center w-full py-2" />
       {/* Sticky header */}
       <div className="sticky top-0 z-20 bg-slate-900/90 backdrop-blur border-b border-white/10 px-4 py-3 flex items-center justify-between">
         <button onClick={() => router.push('/')} className="flex items-center gap-2 text-white/60 hover:text-white text-sm">

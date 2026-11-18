@@ -1,3 +1,6 @@
+/** Realtime channel used to ping POS screens to refresh (carries no data). */
+export const POS_CHANNEL = 'pos-events';
+
 export type OrderSource = 'dine_in' | 'takeaway' | 'zomato' | 'swiggy';
 export type KotStatus = 'new' | 'preparing' | 'ready' | 'served' | 'cancelled';
 export type PaymentMode = 'cash' | 'upi' | 'split' | 'online';

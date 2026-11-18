@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { bad, requirePosUser, unauthorized } from '@/lib/pos/auth';
 import type { KotStatus } from '@/lib/pos/types';
+import { notifyPos } from '@/lib/pos/notify';
 
 /** GET — open kitchen tickets: one ticket per order + KOT round, oldest first. */
 export async function GET(request: NextRequest) {
@@ -43,5 +44,6 @@ export async function POST(request: NextRequest) {
     .eq('kot_round', body.round)
     .in('kot_status', from[status]);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await notifyPos('kitchen');
   return NextResponse.json({ ok: true });
 }

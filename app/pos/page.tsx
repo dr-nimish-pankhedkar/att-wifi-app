@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import PosLogin from '@/components/pos/PosLogin';
 import ItemOptionsDialog, { type PickedLine } from '@/components/pos/ItemOptionsDialog';
+import QuickNav from '@/components/pos/QuickNav';
+import { usePosLive } from '@/lib/pos/useLive';
 import { cn } from '@/lib/utils';
 import {
   dropQueued, enqueue, flushQueue, getQueue, getSession, isNetworkError, posApi, SessionExpired, setSession, uid,
@@ -70,12 +72,13 @@ export default function CaptainPage() {
   useEffect(() => {
     if (!session) return;
     refresh(); syncQueue();
-    const t = setInterval(() => { if (document.visibilityState === 'visible') { refresh(); syncQueue(); } }, 8000);
-    const on = () => { setOnline(true); syncQueue(); refresh(); };
+    const on = () => setOnline(true);
     const off = () => setOnline(false);
     window.addEventListener('online', on); window.addEventListener('offline', off);
-    return () => { clearInterval(t); window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   }, [session, refresh, syncQueue]);
+  // Live updates: instant when any order changes, quiet background refresh otherwise.
+  usePosLive(() => { refresh(); syncQueue(); }, !!session && !target, 10_000);
 
   if (!booted) return null;
   if (!session) return <PosLogin title="Captain" subtitle="Enter your PIN to take orders" onLogin={setSess} />;
@@ -97,7 +100,9 @@ export default function CaptainPage() {
 
   return (
     <main className="min-h-screen bg-stone-50 pb-10">
-      <header className="sticky top-0 z-20 bg-white border-b px-4 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-20 bg-white border-b px-4 pt-2 pb-3">
+        <QuickNav className="-ml-2 mb-1" />
+        <div className="flex items-center justify-between">
         <div>
           <h1 className="font-bold">Tables</h1>
           <p className="text-xs text-muted-foreground">{session.staff.name}</p>
@@ -106,6 +111,7 @@ export default function CaptainPage() {
           {!online && <span className="flex items-center gap-1 text-xs text-red-600"><CloudOff className="w-4 h-4" /> Offline</span>}
           <button onClick={() => { refresh(); syncQueue(); }} className="p-2"><RefreshCw className="w-5 h-5" /></button>
           <button onClick={() => { if (confirm('Log out of this device? You will need a PIN to log in again.')) { setSession(null); setSess(null); } }} className="p-2"><LogOut className="w-5 h-5" /></button>
+        </div>
         </div>
       </header>
 
@@ -214,11 +220,7 @@ function OrderScreen({
   }, [target, floor, onError]);
 
   useEffect(() => { loadOrder(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (!order) return;
-    const t = setInterval(() => { if (document.visibilityState === 'visible') loadOrder(); }, 8000);
-    return () => clearInterval(t);
-  }, [order, loadOrder]);
+  usePosLive(loadOrder, !!order, 10_000);
 
   const items = useMemo(() => {
     if (!menu) return [];
@@ -296,6 +298,7 @@ function OrderScreen({
           <h1 className="font-bold truncate">{title}{order && <span className="text-muted-foreground font-normal"> · Bill #{order.bill_no}</span>}</h1>
           {!onlineHint && <p className="text-xs text-red-600">Offline — new orders will be saved on this phone</p>}
         </div>
+        <QuickNav compact onTables={onBack} className="shrink-0" />
         {order && (
           <Button size="sm" onClick={() => setSettling(true)}><Receipt className="w-4 h-4 mr-1" /> Bill {rupee(order.total)}</Button>
         )}

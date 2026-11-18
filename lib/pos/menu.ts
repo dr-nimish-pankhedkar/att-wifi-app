@@ -42,6 +42,16 @@ export async function loadMenu(supabase: SupabaseClient, includeInactive = false
   return { categories, items: menuItems, addon_groups, bill };
 }
 
+let cache: { at: number; menu: Menu } | null = null;
+/** Staff menu, reused for a few seconds by a warm server instance (saves ~6 queries per order). */
+export async function loadMenuCached(supabase: SupabaseClient, maxAgeMs = 15_000): Promise<Menu> {
+  if (cache && Date.now() - cache.at < maxAgeMs) return cache.menu;
+  const menu = await loadMenu(supabase);
+  cache = { at: Date.now(), menu };
+  return menu;
+}
+export function clearMenuCache() { cache = null; }
+
 /**
  * Turn cart lines from a device into priced order_items rows.
  * Prices always come from the database, never from the device.

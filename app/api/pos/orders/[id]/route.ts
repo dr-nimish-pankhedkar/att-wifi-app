@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { bad, requirePosUser, unauthorized } from '@/lib/pos/auth';
-import { ORDER_SELECT, recalcOrder } from '@/lib/pos/orders';
+import { ORDER_SELECT } from '@/lib/pos/orders';
+import { notifyPos } from '@/lib/pos/notify';
 import type { PaymentMode } from '@/lib/pos/types';
 
 const MODES: PaymentMode[] = ['cash', 'upi', 'split', 'online'];
@@ -67,7 +68,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const { error } = await supabase.from('orders').update(patch).eq('id', order.id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  const totals = await recalcOrder(supabase, order.id);
+  const { data: t } = await supabase.from('orders').select('subtotal, total').eq('id', order.id).single();
+  const totals = { subtotal: Number(t?.subtotal ?? 0), total: Number(t?.total ?? 0) };
 
   if (body.action === 'settle') {
     const mode: PaymentMode = body.payment_mode;
@@ -90,6 +92,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     await supabase.from('order_items').update({ kot_status: 'served' }).eq('order_id', order.id).in('kot_status', ['new', 'preparing', 'ready']);
   }
 
-  const { data: fresh } = await supabase.from('orders').select(ORDER_SELECT).eq('id', order.id).single();
+  const [{ data: fresh }] = await Promise.all([
+    supabase.from('orders').select(ORDER_SELECT).eq('id', order.id).single(),
+    notifyPos('order'),
+  ]);
   return NextResponse.json({ order: fresh });
 }

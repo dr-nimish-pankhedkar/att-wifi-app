@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { bad, requirePosUser, unauthorized } from '@/lib/pos/auth';
-import { recalcOrder } from '@/lib/pos/orders';
+import { notifyPos } from '@/lib/pos/notify';
 import type { KotStatus } from '@/lib/pos/types';
 
 const STATUSES: KotStatus[] = ['new', 'preparing', 'ready', 'served', 'cancelled'];
@@ -26,6 +26,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   const { error } = await supabase.from('order_items').update({ kot_status: status }).eq('id', item.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (status === 'cancelled') await recalcOrder(supabase, item.order_id);
+  await notifyPos('kitchen');
   return NextResponse.json({ ok: true });
 }

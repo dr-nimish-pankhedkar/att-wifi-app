@@ -2,8 +2,9 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { bad, requirePosUser, unauthorized } from '@/lib/pos/auth';
-import { loadMenu, priceLines } from '@/lib/pos/menu';
-import { ORDER_SELECT, recalcOrder } from '@/lib/pos/orders';
+import { loadMenuCached, priceLines } from '@/lib/pos/menu';
+import { ORDER_SELECT } from '@/lib/pos/orders';
+import { notifyPos } from '@/lib/pos/notify';
 import type { CartLineInput, OrderSource } from '@/lib/pos/types';
 
 const SOURCES: OrderSource[] = ['dine_in', 'takeaway', 'zomato', 'swiggy'];
@@ -45,33 +46,29 @@ export async function POST(request: NextRequest) {
 
   const supabase = createAdminClient();
 
-  if (body.client_id) {
-    const { data: existing } = await supabase.from('orders').select(ORDER_SELECT).eq('client_id', body.client_id).maybeSingle();
-    if (existing) return NextResponse.json({ order: existing, duplicate: true });
-  }
+  // Independent lookups in parallel: retry check, menu (cached), open order on the table.
+  const wantsOpen = body.order_id || source === 'dine_in';
+  const openQuery = supabase.from('orders').select('id, order_items(kot_round)').eq('status', 'open');
+  const [existingRes, menuRes, openRes] = await Promise.all([
+    body.client_id ? supabase.from('orders').select(ORDER_SELECT).eq('client_id', body.client_id).maybeSingle() : Promise.resolve({ data: null }),
+    loadMenuCached(supabase).then((m) => ({ m }), (e: Error) => ({ e })),
+    wantsOpen ? (body.order_id ? openQuery.eq('id', body.order_id) : openQuery.eq('table_id', body.table_id)).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+  if (existingRes.data) return NextResponse.json({ order: existingRes.data, duplicate: true });
+  if ('e' in menuRes) return NextResponse.json({ error: menuRes.e.message }, { status: 500 });
 
   let priced;
   try {
-    priced = priceLines(await loadMenu(supabase), lines);
+    priced = priceLines(menuRes.m, lines);
   } catch (e) {
     return bad((e as Error).message);
   }
 
-  let orderId: string | null = null;
-  let round = 1;
-  if (body.order_id || source === 'dine_in') {
-    // Add-on round: to the given order, or to whatever is open on this table.
-    const base = supabase.from('orders').select('id').eq('status', 'open');
-    const { data: open } = await (body.order_id ? base.eq('id', body.order_id) : base.eq('table_id', body.table_id)).maybeSingle();
-    if (body.order_id && !open) return bad('This bill is already closed');
-    if (open) {
-      orderId = open.id;
-      const { data: last } = await supabase
-        .from('order_items').select('kot_round').eq('order_id', open.id)
-        .order('kot_round', { ascending: false }).limit(1).maybeSingle();
-      round = (last?.kot_round ?? 0) + 1;
-    }
-  }
+  const open = openRes.data as { id: string; order_items: { kot_round: number }[] } | null;
+  if (body.order_id && !open) return bad('This bill is already closed');
+  let orderId: string | null = open?.id ?? null;
+  // Add-on round: next KOT number on the open order.
+  const round = open ? Math.max(0, ...open.order_items.map((i) => i.kot_round)) + 1 : 1;
 
   if (!orderId) {
     const { data: created, error } = await supabase
@@ -103,7 +100,9 @@ export async function POST(request: NextRequest) {
     .upsert(priced.map((p) => ({ ...p, order_id: orderId, kot_round: round })), { onConflict: 'client_id', ignoreDuplicates: true });
   if (itemErr) return NextResponse.json({ error: itemErr.message }, { status: 500 });
 
-  await recalcOrder(supabase, orderId!);
-  const { data: order } = await supabase.from('orders').select(ORDER_SELECT).eq('id', orderId!).single();
+  const [{ data: order }] = await Promise.all([
+    supabase.from('orders').select(ORDER_SELECT).eq('id', orderId!).single(),
+    notifyPos('order'),
+  ]);
   return NextResponse.json({ order }, { status: 201 });
 }

@@ -5,6 +5,7 @@ import { ArrowLeft, Delete, IndianRupee, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import QuickNav from '@/components/pos/QuickNav';
 
 interface StaffProfile { id: string; name: string; designation: string | null; photo_url: string | null; }
 
@@ -133,6 +134,7 @@ export default function ExpensesPage() {
   if (!staff) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-emerald-900 via-teal-950 to-slate-900 flex flex-col items-center justify-between px-4 py-10 safe-area-inset">
+        <QuickNav dark className="justify-center w-full py-2" />
         <div className="text-center">
           <div className="w-14 h-14 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center mx-auto mb-4">
             <IndianRupee className="w-7 h-7 text-white" />
@@ -153,6 +155,7 @@ export default function ExpensesPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-emerald-900 via-teal-950 to-slate-900 px-4 py-6 safe-area-inset">
+        <QuickNav dark className="justify-center w-full py-2" />
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
