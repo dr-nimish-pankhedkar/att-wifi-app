@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, FileText, Settings, LogOut, Menu, X, CalendarDays, Package, Salad, BarChart2, IndianRupee } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Settings, LogOut, Menu, X, CalendarDays, Package, Salad, BarChart2, IndianRupee, UtensilsCrossed } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
@@ -12,6 +12,7 @@ const NAV = [
   { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
   { label: 'Staff', href: '/admin/staff', icon: Users },
   { label: 'Schedule', href: '/admin/schedule', icon: CalendarDays },
+  { label: 'POS setup', href: '/admin/pos', icon: UtensilsCrossed },
   { label: 'Inventory', href: '/admin/inventory', icon: Package },
   { label: 'Daily Kitchen', href: '/admin/daily-kitchen', icon: Salad },
   { label: 'Consumption', href: '/admin/consumption', icon: BarChart2 },
