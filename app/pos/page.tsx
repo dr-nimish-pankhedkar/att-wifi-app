@@ -87,7 +87,16 @@ export default function CaptainPage() {
     return (
       <OrderScreen
         target={target} menu={menu} floor={floor} onlineHint={online}
-        onBack={() => { setTarget(null); refresh(); }}
+        onBack={(closedOrderId?: string) => {
+          // A paid/cancelled bill frees its table immediately, before the server round trip.
+          if (closedOrderId) setFloor((f) => {
+            if (!f) return f;
+            const next = { ...f, open_orders: f.open_orders.filter((o) => o.id !== closedOrderId) };
+            cacheSet(CACHE_FLOOR, next);
+            return next;
+          });
+          setTarget(null); refresh();
+        }}
         onQueued={() => setQueueState(getQueue())}
         onError={handleErr}
         onOpenOrder={(orderId) => setTarget({ kind: 'order', orderId })}
@@ -191,7 +200,7 @@ function OrderScreen({
   target, menu, floor, onlineHint, onBack, onQueued, onError, onOpenOrder,
 }: {
   target: Target; menu: Menu | null; floor: Floor | null; onlineHint: boolean;
-  onBack: () => void; onQueued: () => void; onError: (e: unknown) => void; onOpenOrder: (id: string) => void;
+  onBack: (closedOrderId?: string) => void; onQueued: () => void; onError: (e: unknown) => void; onOpenOrder: (id: string) => void;
 }) {
   const [order, setOrder] = useState<OrderRow | null>(null);
   const [loadingOrder, setLoadingOrder] = useState(false);
@@ -293,12 +302,12 @@ function OrderScreen({
   return (
     <main className="min-h-screen bg-stone-50 pb-28">
       <header className="sticky top-0 z-20 bg-white border-b px-3 py-3 flex items-center gap-2">
-        <button onClick={onBack} className="p-2"><ArrowLeft className="w-5 h-5" /></button>
+        <button onClick={() => onBack()} className="p-2"><ArrowLeft className="w-5 h-5" /></button>
         <div className="flex-1 min-w-0">
           <h1 className="font-bold truncate">{title}{order && <span className="text-muted-foreground font-normal"> · Bill #{order.bill_no}</span>}</h1>
           {!onlineHint && <p className="text-xs text-red-600">Offline — new orders will be saved on this phone</p>}
         </div>
-        <QuickNav compact onTables={onBack} className="shrink-0" />
+        <QuickNav compact onTables={() => onBack()} className="shrink-0" />
         {order && (
           <Button size="sm" onClick={() => setSettling(true)}><Receipt className="w-4 h-4 mr-1" /> Bill {rupee(order.total)}</Button>
         )}
@@ -415,7 +424,7 @@ function OrderScreen({
       {order && (
         <SettleDialog open={settling} order={order} bill={menu?.bill ?? { title: '', footer: '', address: '', phone: '', fssai: '', review_url: '' }} tableName={tableName}
           onClose={() => setSettling(false)} onError={onError}
-          onDone={(closed) => { setSettling(false); if (closed) onBack(); else loadOrder(); }} />
+          onDone={(closed) => { setSettling(false); if (closed) onBack(order.id); else loadOrder(); }} />
       )}
     </main>
   );

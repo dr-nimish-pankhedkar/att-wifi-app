@@ -51,6 +51,7 @@ export async function posApi<T = unknown>(url: string, init: RequestInit = {}): 
   const s = getSession();
   if (s) void maybeRenew(s);
   const res = await fetch(url, {
+    cache: 'no-store', // always live data; never a cached copy
     ...init,
     headers: { 'Content-Type': 'application/json', ...(s ? { 'x-pos-session': s.token } : {}), ...(init.headers ?? {}) },
   });

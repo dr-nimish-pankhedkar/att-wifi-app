@@ -26,7 +26,7 @@ export default function QuickNav({ dark = false, compact = false, onTables, clas
           active && (dark ? 'bg-white/15 text-white' : 'bg-stone-900 text-white hover:bg-stone-900'),
         );
         if (href === '/pos' && onTables) {
-          return <button key={href} className={cls} onClick={onTables} aria-label={label}><Icon className="w-4 h-4" />{!compact && label}</button>;
+          return <button key={href} className={cls} onClick={() => onTables()} aria-label={label}><Icon className="w-4 h-4" />{!compact && label}</button>;
         }
         return <Link key={href} href={href} className={cls} aria-label={label}><Icon className="w-4 h-4" />{!compact && label}</Link>;
       })}

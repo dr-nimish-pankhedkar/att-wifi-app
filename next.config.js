@@ -11,6 +11,10 @@ const withPWA = require('@ducanh2912/next-pwa').default({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Live POS data must never be served from any cache.
+  async headers() {
+    return [{ source: '/api/pos/:path*', headers: [{ key: 'Cache-Control', value: 'no-store, max-age=0' }] }];
+  },
   images: {
     remotePatterns: [
       {
