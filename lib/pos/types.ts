@@ -1,6 +1,13 @@
 /** Realtime channel used to ping POS screens to refresh (carries no data). */
 export const POS_CHANNEL = 'pos-events';
 
+/**
+ * Punching Zomato/Swiggy orders into the POS is switched off: aggregator orders are handled in
+ * their own apps (true revenue depends on commission, ads and offers). Planned: import them from
+ * the aggregators' emailed reports instead. Flip to true to show the buttons, online prices and payment mode again.
+ */
+export const AGGREGATORS_IN_POS = false;
+
 export type OrderSource = 'dine_in' | 'takeaway' | 'zomato' | 'swiggy';
 export type KotStatus = 'new' | 'preparing' | 'ready' | 'served' | 'cancelled';
 export type PaymentMode = 'cash' | 'upi' | 'split' | 'online';

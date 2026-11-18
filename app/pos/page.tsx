@@ -15,7 +15,7 @@ import {
   type QueuedOrder, type StoredSession,
 } from '@/lib/pos/client';
 import { billText, whatsappLink } from '@/lib/pos/billText';
-import { channelPrice, fromPrice, rupee, SOURCE_LABEL, type Area, type BillSettings, type Menu, type MenuItem, type OrderRow, type OrderSource, type PaymentMode, type PosTable } from '@/lib/pos/types';
+import { AGGREGATORS_IN_POS, channelPrice, fromPrice, rupee, SOURCE_LABEL, type Area, type BillSettings, type Menu, type MenuItem, type OrderRow, type OrderSource, type PaymentMode, type PosTable } from '@/lib/pos/types';
 
 interface OpenOrder { id: string; bill_no: number; source: OrderSource; table_id: string | null; total: number; created_at: string; customer_name: string | null; ready: boolean; pending: boolean }
 interface Floor { areas: Area[]; tables: PosTable[]; open_orders: OpenOrder[] }
@@ -137,8 +137,8 @@ export default function CaptainPage() {
         </div>
       )}
 
-      <section className="px-4 mt-4 grid grid-cols-3 gap-2">
-        {(['takeaway', 'zomato', 'swiggy'] as OrderSource[]).map((s) => (
+      <section className={cn('px-4 mt-4 grid gap-2', AGGREGATORS_IN_POS ? 'grid-cols-3' : 'grid-cols-1')}>
+        {((AGGREGATORS_IN_POS ? ['takeaway', 'zomato', 'swiggy'] : ['takeaway']) as OrderSource[]).map((s) => (
           <Button key={s} variant="outline" className="h-12" onClick={() => setTarget({ kind: 'source', source: s })}>
             <ShoppingBag className="w-4 h-4 mr-1" /> {SOURCE_LABEL[s]}
           </Button>
@@ -540,8 +540,8 @@ function SettleDialog({ open, order, bill, tableName, onClose, onDone, onError }
           <input className="rounded-lg border px-3 py-2 text-sm" placeholder="Phone (for review msg)" inputMode="numeric" value={phone} onChange={(e) => setPhone(e.target.value)} />
         </div>
 
-        <div className="grid grid-cols-4 gap-2">
-          {(['cash', 'upi', 'split', 'online'] as PaymentMode[]).map((m) => (
+        <div className={cn('grid gap-2', AGGREGATORS_IN_POS || order.source === 'zomato' || order.source === 'swiggy' ? 'grid-cols-4' : 'grid-cols-3')}>
+          {((AGGREGATORS_IN_POS || order.source === 'zomato' || order.source === 'swiggy' ? ['cash', 'upi', 'split', 'online'] : ['cash', 'upi', 'split']) as PaymentMode[]).map((m) => (
             <button key={m} onClick={() => setMode(m)}
               className={cn('rounded-lg border py-3 text-sm font-medium capitalize', mode === m ? 'bg-primary text-primary-foreground border-primary' : 'bg-white')}>
               {m === 'online' ? 'Zomato/Swiggy' : m === 'upi' ? 'UPI' : m}

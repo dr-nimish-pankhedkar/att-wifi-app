@@ -12,7 +12,7 @@ import { createClient } from '@/lib/supabase/client';
 import { authFetch } from '@/lib/supabase/authFetch';
 import { cn } from '@/lib/utils';
 import { billText, whatsappLink } from '@/lib/pos/billText';
-import { fromPrice, rupee, SOURCE_LABEL, type BillSettings, type AddonGroup, type Area, type Category, type Menu, type MenuItem, type OrderRow, type PosTable } from '@/lib/pos/types';
+import { AGGREGATORS_IN_POS, fromPrice, rupee, SOURCE_LABEL, type BillSettings, type AddonGroup, type Area, type Category, type Menu, type MenuItem, type OrderRow, type PosTable } from '@/lib/pos/types';
 
 type Tab = 'floor' | 'menu' | 'addons' | 'sales' | 'bill';
 
@@ -193,7 +193,7 @@ function MenuTab() {
         <Button variant="outline" onClick={addCategory}><Plus className="w-4 h-4 mr-1" /> Category</Button>
       </div>
 
-      <OnlinePriceTool onDone={load} />
+      {AGGREGATORS_IN_POS && <OnlinePriceTool onDone={load} />}
 
       {menu.categories.map((c, ci) => {
         const items = menu.items.filter((i) => i.category_id === c.id && (!term || i.name.toLowerCase().includes(term)));
@@ -324,7 +324,7 @@ function ItemEditor({ item, menu, onClose, onSaved }: { item: Partial<MenuItem>;
           <Button size="sm" variant="outline" onClick={() => setVars([...vars, { name: '', price: f.price }])}><Plus className="w-3 h-3 mr-1" /> Option</Button>
         </div>
 
-        <div className="rounded-lg border p-3 text-sm">
+        {AGGREGATORS_IN_POS && <div className="rounded-lg border p-3 text-sm">
           <p className="font-medium">Online prices</p>
           <p className="text-xs text-muted-foreground mb-2">Leave blank to use the dine-in price.</p>
           <div className="grid grid-cols-[1fr_70px_80px_80px] gap-2 items-center">
@@ -341,7 +341,7 @@ function ItemEditor({ item, menu, onClose, onSaved }: { item: Partial<MenuItem>;
               </div>
             ))}
           </div>
-        </div>
+        </div>}
 
         {menu.addon_groups.length > 0 && (
           <div className="text-sm">
@@ -451,7 +451,7 @@ function BillsTab() {
     <div className="space-y-4">
       <input type="date" className="rounded-lg border px-3 py-2 text-sm" value={date} max={today} onChange={(e) => setDate(e.target.value)} />
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {[['Sales', rupee(s.total)], ['Bills', String(s.count)], ['Cash', rupee(s.cash)], ['UPI', rupee(s.upi)], ['Zomato/Swiggy', rupee(s.online)], ['Discounts', rupee(s.discount)], ['Still open', String(s.open)], ['Cancelled', String(s.cancelled)]].map(([l, v]) => (
+        {[['Sales', rupee(s.total)], ['Bills', String(s.count)], ['Cash', rupee(s.cash)], ['UPI', rupee(s.upi)], ...(AGGREGATORS_IN_POS ? [['Zomato/Swiggy', rupee(s.online)]] : []), ['Discounts', rupee(s.discount)], ['Still open', String(s.open)], ['Cancelled', String(s.cancelled)]].map(([l, v]) => (
           <div key={l} className="rounded-xl border p-3"><p className="text-xs text-muted-foreground">{l}</p><p className="text-lg font-bold">{v}</p></div>
         ))}
       </div>
