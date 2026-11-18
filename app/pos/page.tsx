@@ -15,7 +15,7 @@ import {
   type QueuedOrder, type StoredSession,
 } from '@/lib/pos/client';
 import { billText, whatsappLink } from '@/lib/pos/billText';
-import { rupee, SOURCE_LABEL, type Area, type BillSettings, type Menu, type MenuItem, type OrderRow, type OrderSource, type PaymentMode, type PosTable } from '@/lib/pos/types';
+import { channelPrice, fromPrice, rupee, SOURCE_LABEL, type Area, type BillSettings, type Menu, type MenuItem, type OrderRow, type OrderSource, type PaymentMode, type PosTable } from '@/lib/pos/types';
 
 interface OpenOrder { id: string; bill_no: number; source: OrderSource; table_id: string | null; total: number; created_at: string; customer_name: string | null; ready: boolean; pending: boolean }
 interface Floor { areas: Area[]; tables: PosTable[]; open_orders: OpenOrder[] }
@@ -245,7 +245,7 @@ function OrderScreen({
   function addSimple(item: MenuItem) {
     if (!item.in_stock) { toast.error(`${item.name} is out of stock`); return; }
     if (item.variations.length || item.addon_group_ids.length) { setPicking(item); return; }
-    addLine({ item, variation_id: null, variation_name: null, addons: [], qty: 1, note: '', unit: item.price });
+    addLine({ item, variation_id: null, variation_name: null, addons: [], qty: 1, note: '', unit: channelPrice(item, source, null) });
   }
   function addLine(l: PickedLine) {
     setCart((c) => {
@@ -376,7 +376,7 @@ function OrderScreen({
               </span>
               <p className="text-sm font-medium pr-4 leading-tight">{i.name}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {i.variations.length > 1 ? `from ${rupee(i.price)}` : rupee(i.price)}{!i.in_stock && ' · out of stock'}
+                {i.variations.length > 1 ? `from ${rupee(fromPrice(i, source))}` : rupee(fromPrice(i, source))}{!i.in_stock && ' · out of stock'}
               </p>
               {inCart > 0 && <span className="absolute bottom-2 right-2 text-xs font-bold text-primary">×{inCart}</span>}
             </button>
@@ -419,7 +419,7 @@ function OrderScreen({
         </DialogContent>
       </Dialog>
 
-      <ItemOptionsDialog item={picking} groups={menu?.addon_groups ?? []} onClose={() => setPicking(null)} onAdd={addLine} />
+      <ItemOptionsDialog item={picking} groups={menu?.addon_groups ?? []} source={source} onClose={() => setPicking(null)} onAdd={addLine} />
 
       {order && (
         <SettleDialog open={settling} order={order} bill={menu?.bill ?? { title: '', footer: '', address: '', phone: '', fssai: '', review_url: '' }} tableName={tableName}

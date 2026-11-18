@@ -1,9 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AddonGroup, CartLineInput, Menu, MenuItem } from './types';
+import { channelPrice, type AddonGroup, type CartLineInput, type Menu, type MenuItem, type OrderSource } from './types';
 
 /** Load the full menu. Staff see only active rows; admins can ask for everything. */
 export async function loadMenu(supabase: SupabaseClient, includeInactive = false): Promise<Menu> {
-  const [cats, items, vars, groups, opts, links, settings] = await Promise.all([
+  const [cats, items, vars, groups, opts, links, settings, chan] = await Promise.all([
     supabase.from('menu_categories').select('*').order('sort_order'),
     supabase.from('menu_items').select('*').order('sort_order'),
     supabase.from('menu_variations').select('*').order('sort_order'),
@@ -11,6 +11,7 @@ export async function loadMenu(supabase: SupabaseClient, includeInactive = false
     supabase.from('addon_options').select('*').order('sort_order'),
     supabase.from('menu_item_addon_groups').select('*'),
     supabase.from('settings').select('company_name, bill_title, bill_footer, bill_address, bill_phone, bill_fssai, review_url').limit(1).maybeSingle(),
+    supabase.from('menu_channel_prices').select('menu_item_id, variation_id, source, price'),
   ]);
   const err = [cats, items, vars, groups, opts, links].find((r) => r.error)?.error;
   if (err) throw new Error(err.message);
@@ -32,6 +33,7 @@ export async function loadMenu(supabase: SupabaseClient, includeInactive = false
       price: Number(i.price),
       variations: (vars.data ?? []).filter((v) => v.menu_item_id === i.id && keep(v)).map((v) => ({ ...v, price: Number(v.price) })),
       addon_group_ids: (links.data ?? []).filter((l) => l.menu_item_id === i.id).map((l) => l.addon_group_id),
+      channel_prices: (chan.data ?? []).filter((c) => c.menu_item_id === i.id).map((c) => ({ source: c.source, variation_id: c.variation_id, price: Number(c.price) })),
     }));
 
   const st = settings.data;
@@ -56,7 +58,7 @@ export function clearMenuCache() { cache = null; }
  * Turn cart lines from a device into priced order_items rows.
  * Prices always come from the database, never from the device.
  */
-export function priceLines(menu: Menu, lines: CartLineInput[]) {
+export function priceLines(menu: Menu, lines: CartLineInput[], source: OrderSource = 'dine_in') {
   const itemById = new Map(menu.items.map((i) => [i.id, i]));
   const optById = new Map(menu.addon_groups.flatMap((g) => g.options.map((o) => [o.id, { ...o, group: g }] as const)));
 
@@ -67,14 +69,14 @@ export function priceLines(menu: Menu, lines: CartLineInput[]) {
     const qty = Math.floor(Number(line.qty));
     if (!(qty > 0 && qty <= 99)) throw new Error(`Invalid quantity for ${item.name}`);
 
-    let unit = item.price;
     let variation_name: string | null = null;
     let variation_id: string | null = null;
     if (item.variations.length > 0) {
       const v = item.variations.find((x) => x.id === line.variation_id);
       if (!v) throw new Error(`Choose an option for ${item.name}`);
-      unit = v.price; variation_name = v.name; variation_id = v.id;
+      variation_name = v.name; variation_id = v.id;
     }
+    let unit = channelPrice(item, source, variation_id);
 
     const addons = (line.addon_option_ids ?? []).map((id) => {
       const o = optById.get(id);

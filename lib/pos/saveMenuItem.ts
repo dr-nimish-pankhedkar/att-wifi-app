@@ -6,6 +6,8 @@ export interface MenuItemInput {
   variation_group?: string;
   variations?: { id?: string; name: string; price: number }[];
   addon_group_ids?: string[];
+  /** Full replacement of channel prices. `variation` is the option name (null for items without options). */
+  channel_prices?: { source: 'takeaway' | 'zomato' | 'swiggy'; variation: string | null; price: number }[];
 }
 
 /** Create or update a menu item together with its options and add-on groups. */
@@ -67,6 +69,24 @@ export async function saveMenuItem(supabase: SupabaseClient, id: string | null, 
     await supabase.from('menu_item_addon_groups').delete().eq('menu_item_id', id);
     if (b.addon_group_ids.length) {
       const { error } = await supabase.from('menu_item_addon_groups').insert(b.addon_group_ids.map((g) => ({ menu_item_id: id, addon_group_id: g })));
+      if (error) return { error: error.message };
+    }
+  }
+  if (b.channel_prices) {
+    const { data: vrows } = await supabase.from('menu_variations').select('id, name').eq('menu_item_id', id).eq('active', true);
+    const byName = new Map((vrows ?? []).map((v) => [v.name.toLowerCase(), v.id as string]));
+    const rows = [];
+    for (const c of b.channel_prices) {
+      if (!['takeaway', 'zomato', 'swiggy'].includes(c.source)) return { error: 'Invalid channel' };
+      const price = Math.round(Number(c.price) * 100) / 100;
+      if (!(price >= 0)) return { error: 'Invalid channel price' };
+      const variation_id = c.variation ? byName.get(c.variation.toLowerCase()) ?? null : null;
+      if (c.variation && !variation_id) continue; // option was removed
+      rows.push({ menu_item_id: id, variation_id, source: c.source, price });
+    }
+    await supabase.from('menu_channel_prices').delete().eq('menu_item_id', id);
+    if (rows.length) {
+      const { error } = await supabase.from('menu_channel_prices').insert(rows);
       if (error) return { error: error.message };
     }
   }

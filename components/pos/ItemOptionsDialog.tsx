@@ -5,7 +5,7 @@ import { Minus, Plus } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { rupee, type AddonGroup, type MenuItem } from '@/lib/pos/types';
+import { channelPrice, rupee, type AddonGroup, type MenuItem, type OrderSource } from '@/lib/pos/types';
 
 export interface PickedLine {
   item: MenuItem;
@@ -17,14 +17,13 @@ export interface PickedLine {
   unit: number;
 }
 
-export function unitPrice(item: MenuItem, variationId: string | null, addons: { price: number }[]) {
-  const base = item.variations.length ? item.variations.find((v) => v.id === variationId)?.price ?? 0 : item.price;
-  return base + addons.reduce((s, a) => s + a.price, 0);
+export function unitPrice(item: MenuItem, variationId: string | null, addons: { price: number }[], source: OrderSource = 'dine_in') {
+  return channelPrice(item, source, variationId) + addons.reduce((s, a) => s + a.price, 0);
 }
 
 export default function ItemOptionsDialog({
-  item, groups, onClose, onAdd,
-}: { item: MenuItem | null; groups: AddonGroup[]; onClose: () => void; onAdd: (l: PickedLine) => void }) {
+  item, groups, source = 'dine_in', onClose, onAdd,
+}: { item: MenuItem | null; groups: AddonGroup[]; source?: OrderSource; onClose: () => void; onAdd: (l: PickedLine) => void }) {
   const [variation, setVariation] = useState<string | null>(null);
   const [addons, setAddons] = useState<string[]>([]);
   const [qty, setQty] = useState(1);
@@ -39,7 +38,7 @@ export default function ItemOptionsDialog({
   if (!item) return null;
 
   const chosenAddons = itemGroups.flatMap((g) => g.options.filter((o) => addons.includes(o.id)).map((o) => ({ ...o, group_id: g.id })));
-  const unit = unitPrice(item, variation, chosenAddons);
+  const unit = unitPrice(item, variation, chosenAddons, source);
   const groupError = itemGroups.find((g) => {
     const n = chosenAddons.filter((a) => a.group_id === g.id).length;
     return n < g.min_select || n > g.max_select;
@@ -70,7 +69,7 @@ export default function ItemOptionsDialog({
                 <button key={v.id} onClick={() => setVariation(v.id)}
                   className={cn('rounded-lg border px-3 py-3 text-left', variation === v.id ? 'border-primary bg-primary/10 ring-1 ring-primary' : 'border-border')}>
                   <div className="font-medium">{v.name}</div>
-                  <div className="text-sm text-muted-foreground">{rupee(v.price)}</div>
+                  <div className="text-sm text-muted-foreground">{rupee(channelPrice(item, source, v.id))}</div>
                 </button>
               ))}
             </div>

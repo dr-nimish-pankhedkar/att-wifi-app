@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
 
   // Independent lookups in parallel: retry check, menu (cached), open order on the table.
   const wantsOpen = body.order_id || source === 'dine_in';
-  const openQuery = supabase.from('orders').select('id, order_items(kot_round)').eq('status', 'open');
+  const openQuery = supabase.from('orders').select('id, source, order_items(kot_round)').eq('status', 'open');
   const [existingRes, menuRes, openRes] = await Promise.all([
     body.client_id ? supabase.from('orders').select(ORDER_SELECT).eq('client_id', body.client_id).maybeSingle() : Promise.resolve({ data: null }),
     loadMenuCached(supabase).then((m) => ({ m }), (e: Error) => ({ e })),
@@ -57,15 +57,16 @@ export async function POST(request: NextRequest) {
   if (existingRes.data) return NextResponse.json({ order: existingRes.data, duplicate: true });
   if ('e' in menuRes) return NextResponse.json({ error: menuRes.e.message }, { status: 500 });
 
+  const open = openRes.data as { id: string; source: OrderSource; order_items: { kot_round: number }[] } | null;
+  if (body.order_id && !open) return bad('This bill is already closed');
+
+  // Price by channel: an add-on round keeps the original order's channel (e.g. Zomato prices).
   let priced;
   try {
-    priced = priceLines(menuRes.m, lines);
+    priced = priceLines(menuRes.m, lines, open?.source ?? source);
   } catch (e) {
     return bad((e as Error).message);
   }
-
-  const open = openRes.data as { id: string; order_items: { kot_round: number }[] } | null;
-  if (body.order_id && !open) return bad('This bill is already closed');
   let orderId: string | null = open?.id ?? null;
   // Add-on round: next KOT number on the open order.
   const round = open ? Math.max(0, ...open.order_items.map((i) => i.kot_round)) + 1 : 1;

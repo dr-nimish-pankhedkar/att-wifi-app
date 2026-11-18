@@ -20,6 +20,25 @@ export interface MenuItem {
   description: string | null; food_type: 'veg' | 'nonveg' | 'egg'; sort_order: number;
   active: boolean; in_stock: boolean;
   variations: Variation[]; addon_group_ids: string[];
+  /** Channel price overrides; missing = dine-in price. */
+  channel_prices: ChannelPrice[];
+}
+export type PriceChannel = 'takeaway' | 'zomato' | 'swiggy';
+export const PRICE_CHANNELS: PriceChannel[] = ['zomato', 'swiggy', 'takeaway'];
+export interface ChannelPrice { source: PriceChannel; variation_id: string | null; price: number }
+
+/** Price of an item (or one of its options) for an order channel. */
+export function channelPrice(item: MenuItem, source: OrderSource, variationId: string | null): number {
+  const base = item.variations.length ? item.variations.find((v) => v.id === variationId)?.price ?? item.price : item.price;
+  if (source === 'dine_in') return base;
+  const o = item.channel_prices?.find((c) => c.source === source && (c.variation_id ?? null) === (item.variations.length ? variationId : null));
+  return o ? o.price : base;
+}
+
+/** Lowest price shown on the item tile for a channel. */
+export function fromPrice(item: MenuItem, source: OrderSource): number {
+  if (!item.variations.length) return channelPrice(item, source, null);
+  return Math.min(...item.variations.map((v) => channelPrice(item, source, v.id)));
 }
 export interface Category { id: string; name: string; sort_order: number; active: boolean }
 export interface BillSettings { title: string; footer: string; address: string; phone: string; fssai: string; review_url: string }

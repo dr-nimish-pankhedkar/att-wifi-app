@@ -12,7 +12,7 @@ import { createClient } from '@/lib/supabase/client';
 import { authFetch } from '@/lib/supabase/authFetch';
 import { cn } from '@/lib/utils';
 import { billText, whatsappLink } from '@/lib/pos/billText';
-import { rupee, SOURCE_LABEL, type BillSettings, type AddonGroup, type Area, type Category, type Menu, type MenuItem, type OrderRow, type PosTable } from '@/lib/pos/types';
+import { fromPrice, rupee, SOURCE_LABEL, type BillSettings, type AddonGroup, type Area, type Category, type Menu, type MenuItem, type OrderRow, type PosTable } from '@/lib/pos/types';
 
 type Tab = 'floor' | 'menu' | 'addons' | 'sales' | 'bill';
 
@@ -193,6 +193,8 @@ function MenuTab() {
         <Button variant="outline" onClick={addCategory}><Plus className="w-4 h-4 mr-1" /> Category</Button>
       </div>
 
+      <OnlinePriceTool onDone={load} />
+
       {menu.categories.map((c, ci) => {
         const items = menu.items.filter((i) => i.category_id === c.id && (!term || i.name.toLowerCase().includes(term)));
         if (term && !items.length) return null;
@@ -214,6 +216,7 @@ function MenuTab() {
                     <p className="text-xs text-muted-foreground truncate">
                       {i.variations.length ? i.variations.map((v) => `${v.name} ${rupee(v.price)}`).join(' / ') : rupee(i.price)}
                       {i.addon_group_ids.length > 0 && ` · add-ons: ${menu.addon_groups.filter((g) => i.addon_group_ids.includes(g.id)).map((g) => g.name).join(', ')}`}
+                      {(['zomato', 'swiggy'] as const).map((src) => i.channel_prices.some((c) => c.source === src) ? ` · ${src === 'zomato' ? 'Zomato' : 'Swiggy'} ${rupee(fromPrice(i, src))}` : '').join('')}
                     </p>
                   </div>
                   <button onClick={() => patchItem(i.id, { in_stock: !i.in_stock })}
@@ -245,6 +248,15 @@ function ItemEditor({ item, menu, onClose, onSaved }: { item: Partial<MenuItem>;
   const [vars, setVars] = useState<{ id?: string; name: string; price: string }[]>((item.variations ?? []).map((v) => ({ id: v.id, name: v.name, price: String(v.price) })));
   const [addons, setAddons] = useState<string[]>(item.addon_group_ids ?? []);
   const [busy, setBusy] = useState(false);
+  // Online prices keyed by `${channel}|${option name or ''}`; blank = same as dine-in.
+  const [chan, setChan] = useState<Record<string, string>>(() => {
+    const m: Record<string, string> = {};
+    for (const c of item.channel_prices ?? []) {
+      const vname = c.variation_id ? item.variations?.find((v) => v.id === c.variation_id)?.name ?? '' : '';
+      m[`${c.source}|${vname}`] = String(c.price);
+    }
+    return m;
+  });
 
   async function save() {
     setBusy(true);
@@ -252,6 +264,9 @@ function ItemEditor({ item, menu, onClose, onSaved }: { item: Partial<MenuItem>;
       ...f, price: Number(f.price || 0), variation_group: group,
       variations: vars.filter((v) => v.name.trim()).map((v) => ({ id: v.id, name: v.name, price: Number(v.price) })),
       addon_group_ids: addons,
+      channel_prices: Object.entries(chan)
+        .filter(([k, v]) => v.trim() !== '' && (k.split('|')[1] === '' ? vars.filter((x) => x.name.trim()).length === 0 : vars.some((x) => x.name.trim() === k.split('|')[1])))
+        .map(([k, v]) => ({ source: k.split('|')[0] as 'zomato' | 'swiggy', variation: k.split('|')[1] || null, price: Number(v) })),
     };
     try {
       if (item.id) await api(`/api/pos/admin/menu-items/${item.id}`, 'PATCH', body);
@@ -307,6 +322,25 @@ function ItemEditor({ item, menu, onClose, onSaved }: { item: Partial<MenuItem>;
             </div>
           ))}
           <Button size="sm" variant="outline" onClick={() => setVars([...vars, { name: '', price: f.price }])}><Plus className="w-3 h-3 mr-1" /> Option</Button>
+        </div>
+
+        <div className="rounded-lg border p-3 text-sm">
+          <p className="font-medium">Online prices</p>
+          <p className="text-xs text-muted-foreground mb-2">Leave blank to use the dine-in price.</p>
+          <div className="grid grid-cols-[1fr_70px_80px_80px] gap-2 items-center">
+            <span className="text-xs text-muted-foreground"></span><span className="text-xs text-muted-foreground">Dine-in</span>
+            <span className="text-xs text-muted-foreground">Zomato</span><span className="text-xs text-muted-foreground">Swiggy</span>
+            {(vars.filter((v) => v.name.trim()).length ? vars.filter((v) => v.name.trim()).map((v) => ({ key: v.name.trim(), label: v.name, price: v.price })) : [{ key: '', label: 'Price', price: f.price }]).map((row) => (
+              <div key={row.key} className="contents">
+                <span className="truncate">{row.label}</span>
+                <span>₹{row.price || '–'}</span>
+                {(['zomato', 'swiggy'] as const).map((src) => (
+                  <input key={src} className="rounded border px-2 py-1" inputMode="decimal" placeholder={row.price || ''}
+                    value={chan[`${src}|${row.key}`] ?? ''} onChange={(e) => setChan({ ...chan, [`${src}|${row.key}`]: e.target.value })} />
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
 
         {menu.addon_groups.length > 0 && (
@@ -515,6 +549,49 @@ function BillMessageTab() {
         <p className="text-sm font-medium mb-2">WhatsApp message preview</p>
         <pre className="whitespace-pre-wrap rounded-xl bg-[#e7fbd8] p-4 text-sm font-sans">{sample}</pre>
       </div>
+    </div>
+  );
+}
+
+/* ───────────── Bulk online prices ───────────── */
+
+function OnlinePriceTool({ onDone }: { onDone: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [source, setSource] = useState<'zomato' | 'swiggy'>('zomato');
+  const [percent, setPercent] = useState('20');
+  const [roundTo, setRoundTo] = useState('5');
+  const [overwrite, setOverwrite] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function apply(clear = false) {
+    if (clear && !confirm(`Remove all ${source} prices? Items will use dine-in prices.`)) return;
+    setBusy(true);
+    try {
+      await api('/api/pos/admin/channel-prices', 'POST', clear ? { source, clear: true } : { source, percent: Number(percent), round_to: Number(roundTo), overwrite });
+      toast.success('Online prices updated'); onDone();
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  }
+
+  if (!open) return <button className="text-sm text-primary underline" onClick={() => setOpen(true)}>Set Zomato / Swiggy prices for all items…</button>;
+  return (
+    <div className="rounded-xl border p-4 space-y-3 text-sm">
+      <p className="font-medium">Set online prices in bulk</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <select className="rounded border px-2 py-1" value={source} onChange={(e) => setSource(e.target.value as 'zomato' | 'swiggy')}>
+          <option value="zomato">Zomato</option><option value="swiggy">Swiggy</option>
+        </select>
+        <span>= dine-in +</span>
+        <input className="w-16 rounded border px-2 py-1" inputMode="decimal" value={percent} onChange={(e) => setPercent(e.target.value)} />
+        <span>%, rounded up to ₹</span>
+        <input className="w-14 rounded border px-2 py-1" inputMode="numeric" value={roundTo} onChange={(e) => setRoundTo(e.target.value)} />
+      </div>
+      <label className="flex items-center gap-2"><input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} /> Also replace prices I already set by hand</label>
+      <div className="flex gap-2">
+        <Button size="sm" disabled={busy} onClick={() => apply()}>Apply</Button>
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => apply(true)}>Clear {source} prices</Button>
+        <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Close</Button>
+      </div>
+      <p className="text-xs text-muted-foreground">Fine-tune any single item afterwards with ✏️ → Online prices.</p>
     </div>
   );
 }
