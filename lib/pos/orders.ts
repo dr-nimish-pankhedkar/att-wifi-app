@@ -17,5 +17,5 @@ export async function recalcOrder(supabase: SupabaseClient, orderId: string) {
 }
 
 export const ORDER_SELECT =
-  'id, bill_no, source, table_id, status, customer_name, customer_phone, subtotal, discount, total, payment_mode, cash_amount, upi_amount, notes, created_at, settled_at, captain_id, ' +
+  'id, bill_no, source, table_id, status, customer_name, customer_phone, subtotal, discount, total, payment_mode, cash_amount, upi_amount, notes, created_at, settled_at, captain_id, public_token, feedback_rating, feedback_comment, ' +
   'order_items(id, order_id, menu_item_id, name, variation_name, addons, price, qty, note, kot_round, kot_status, created_at, updated_at)';

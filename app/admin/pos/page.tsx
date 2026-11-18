@@ -54,7 +54,7 @@ export default function PosAdminPage() {
         <h1 className="text-2xl font-bold mb-1">POS setup</h1>
         <p className="text-sm text-muted-foreground mb-4">Tables, menu and add-ons used by the captain app (/pos) and kitchen screen (/kitchen).</p>
         <div className="flex gap-2 mb-5 overflow-x-auto">
-          {([['floor', 'Floor & tables'], ['menu', 'Menu'], ['addons', 'Add-ons'], ['sales', 'Bills'], ['bill', 'WhatsApp bill']] as [Tab, string][]).map(([k, l]) => (
+          {([['floor', 'Floor & tables'], ['menu', 'Menu'], ['addons', 'Add-ons'], ['sales', 'Bills'], ['bill', 'Bill & WhatsApp']] as [Tab, string][]).map(([k, l]) => (
             <button key={k} onClick={() => setTab(k)} className={cn('px-4 py-2 rounded-lg text-sm font-medium border shrink-0', tab === k ? 'bg-primary text-primary-foreground border-primary' : 'bg-background')}>{l}</button>
           ))}
         </div>
@@ -396,13 +396,11 @@ function BillsTab() {
   const [date, setDate] = useState(today);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [open, setOpen] = useState<string | null>(null);
-  const [bill, setBill] = useState<BillSettings>({ title: '', footer: '' });
-  const [tables, setTables] = useState<PosTable[]>([]);
+  const [bill, setBill] = useState<BillSettings>({ title: '', footer: '', address: '', phone: '', fssai: '', review_url: '' });
   const load = useCallback(async () => { try { setOrders((await api<{ orders: OrderRow[] }>(`/api/pos/orders?date=${date}`)).orders); } catch (e) { fail(e); } }, [date]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     api<Menu>('/api/pos/menu').then((m) => setBill(m.bill)).catch(() => {});
-    api<{ tables: PosTable[] }>('/api/pos/floor?all=1').then((f) => setTables(f.tables)).catch(() => {});
   }, []);
 
   const s = useMemo(() => {
@@ -430,6 +428,7 @@ function BillsTab() {
               <span className="font-semibold w-14">#{o.bill_no}</span>
               <span className="flex-1">{SOURCE_LABEL[o.source]}{o.customer_name ? ` · ${o.customer_name}` : ''}</span>
               <span className={cn('text-xs px-2 rounded-full', o.status === 'settled' ? 'bg-green-100 text-green-800' : o.status === 'open' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-700')}>{o.status}{o.payment_mode ? ` · ${o.payment_mode}` : ''}</span>
+              {o.feedback_rating && <span>{{ loved: '😍', okay: '🙂', improve: '😕' }[o.feedback_rating]}</span>}
               <span className="w-20 text-right font-medium">{rupee(Number(o.total))}</span>
             </button>
             {open === o.id && (
@@ -441,8 +440,11 @@ function BillsTab() {
                   </div>
                 ))}
                 {o.customer_phone && <p>Phone: {o.customer_phone}</p>}
+                {o.feedback_rating && (
+                  <p className="mt-1 text-foreground">Feedback: {{ loved: '😍 Loved it', okay: '🙂 Okay', improve: '😕 Needs improvement' }[o.feedback_rating]}{o.feedback_comment ? ` — “${o.feedback_comment}”` : ''}</p>
+                )}
                 {o.status === 'settled' && o.customer_phone && (() => {
-                  const link = whatsappLink(o.customer_phone, billText(o, bill, tables.find((t) => t.id === o.table_id)?.name));
+                  const link = whatsappLink(o.customer_phone, billText(o, bill, window.location.origin));
                   return link ? <a href={link} target="_blank" rel="noopener noreferrer" className="inline-block mt-2 mr-2 rounded-md bg-green-600 text-white text-sm px-3 py-1.5">Send bill on WhatsApp</a> : null;
                 })()}
                 {o.status === 'settled' && (
@@ -472,12 +474,12 @@ function BillMessageTab() {
   const sample = billText({
     id: 'x', bill_no: 101, source: 'dine_in', table_id: null, status: 'settled', customer_name: 'Rahul', customer_phone: null,
     subtotal: 165, discount: 10, total: 155, payment_mode: 'upi', cash_amount: 0, upi_amount: 155, notes: null,
-    created_at: new Date().toISOString(), settled_at: new Date().toISOString(), captain_id: null,
+    created_at: new Date().toISOString(), settled_at: new Date().toISOString(), captain_id: null, public_token: 'sample',
     order_items: [
       { id: '1', order_id: 'x', menu_item_id: null, name: 'Cold Coffee', variation_name: null, addons: [], price: 60, qty: 2, note: null, kot_round: 1, kot_status: 'served', created_at: '', updated_at: '' },
       { id: '2', order_id: 'x', menu_item_id: null, name: 'Puneri Shev Pav', variation_name: 'Jain', addons: [], price: 45, qty: 1, note: null, kot_round: 1, kot_status: 'served', created_at: '', updated_at: '' },
     ],
-  }, bill, 'G1');
+  }, bill, typeof window !== 'undefined' ? window.location.origin : '');
 
   async function save() {
     setBusy(true);
@@ -490,13 +492,27 @@ function BillMessageTab() {
         <label className="text-sm block">Heading (your café name)
           <input className="w-full rounded-lg border px-3 py-2 text-sm" value={bill.title} onChange={(e) => setBill({ ...bill, title: e.target.value })} />
         </label>
-        <label className="text-sm block">Closing message (thank-you, Google review link, Instagram…)
+        <label className="text-sm block">Address
+          <input className="w-full rounded-lg border px-3 py-2 text-sm" value={bill.address} onChange={(e) => setBill({ ...bill, address: e.target.value })} />
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="text-sm block">Phone
+            <input className="w-full rounded-lg border px-3 py-2 text-sm" value={bill.phone} onChange={(e) => setBill({ ...bill, phone: e.target.value })} />
+          </label>
+          <label className="text-sm block">FSSAI no.
+            <input className="w-full rounded-lg border px-3 py-2 text-sm" value={bill.fssai} onChange={(e) => setBill({ ...bill, fssai: e.target.value })} />
+          </label>
+        </div>
+        <label className="text-sm block">Google review link (shown on the bill page)
+          <input className="w-full rounded-lg border px-3 py-2 text-sm" placeholder="https://g.page/r/…/review" value={bill.review_url} onChange={(e) => setBill({ ...bill, review_url: e.target.value })} />
+        </label>
+        <label className="text-sm block">Closing message on WhatsApp (thank-you, Instagram…)
           <textarea className="w-full rounded-lg border px-3 py-2 text-sm" rows={8} value={bill.footer} onChange={(e) => setBill({ ...bill, footer: e.target.value })} />
         </label>
         <Button disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save'}</Button>
       </div>
       <div>
-        <p className="text-sm font-medium mb-2">Preview</p>
+        <p className="text-sm font-medium mb-2">WhatsApp message preview</p>
         <pre className="whitespace-pre-wrap rounded-xl bg-[#e7fbd8] p-4 text-sm font-sans">{sample}</pre>
       </div>
     </div>

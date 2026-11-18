@@ -410,7 +410,7 @@ function OrderScreen({
       <ItemOptionsDialog item={picking} groups={menu?.addon_groups ?? []} onClose={() => setPicking(null)} onAdd={addLine} />
 
       {order && (
-        <SettleDialog open={settling} order={order} bill={menu?.bill ?? { title: '', footer: '' }} tableName={tableName}
+        <SettleDialog open={settling} order={order} bill={menu?.bill ?? { title: '', footer: '', address: '', phone: '', fssai: '', review_url: '' }} tableName={tableName}
           onClose={() => setSettling(false)} onError={onError}
           onDone={(closed) => { setSettling(false); if (closed) onBack(); else loadOrder(); }} />
       )}
@@ -483,7 +483,7 @@ function SettleDialog({ open, order, bill, tableName, onClose, onDone, onError }
   const lines = (order.order_items ?? []).filter((l) => l.kot_status !== 'cancelled');
 
   if (paid) {
-    const link = whatsappLink(phone, billText(paid, bill, tableName));
+    const link = whatsappLink(phone, billText(paid, bill, window.location.origin));
     return (
       <Dialog open={open} onOpenChange={(o) => !o && onDone(true)}>
         <DialogContent>

@@ -19,7 +19,7 @@ export interface MenuItem {
   variations: Variation[]; addon_group_ids: string[];
 }
 export interface Category { id: string; name: string; sort_order: number; active: boolean }
-export interface BillSettings { title: string; footer: string }
+export interface BillSettings { title: string; footer: string; address: string; phone: string; fssai: string; review_url: string }
 export interface Menu { categories: Category[]; items: MenuItem[]; addon_groups: AddonGroup[]; bill: BillSettings }
 
 export interface Area { id: string; name: string; sort_order: number; active: boolean }
@@ -45,6 +45,7 @@ export interface OrderRow {
   customer_name: string | null; customer_phone: string | null; subtotal: number; discount: number; total: number;
   payment_mode: PaymentMode | null; cash_amount: number; upi_amount: number; notes: string | null;
   created_at: string; settled_at: string | null; captain_id: string | null;
+  public_token?: string; feedback_rating?: 'loved' | 'okay' | 'improve' | null; feedback_comment?: string | null;
   order_items?: OrderItemRow[];
 }
 
