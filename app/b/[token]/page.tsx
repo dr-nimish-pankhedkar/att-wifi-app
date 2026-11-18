@@ -88,7 +88,7 @@ export default async function BillPage({ params }: { params: { token: string } }
         {st?.bill_fssai && <p className="text-center text-xs text-stone-500 mt-4">FSSAI: {st.bill_fssai}</p>}
         <p className="text-center text-xs text-stone-400 mt-1">Not a tax invoice</p>
 
-        <BillActions token={params.token} reviewUrl={st?.review_url ?? ''} settled={o.status === 'settled'} initialRating={o.feedback_rating} title={title} />
+        <BillActions token={params.token} settled={o.status === 'settled'} initialRating={o.feedback_rating} title={title} />
       </div>
     </main>
   );

@@ -537,7 +537,7 @@ function BillMessageTab() {
             <input className="w-full rounded-lg border px-3 py-2 text-sm" value={bill.fssai} onChange={(e) => setBill({ ...bill, fssai: e.target.value })} />
           </label>
         </div>
-        <label className="text-sm block">Google review link (shown on the bill page)
+        <label className="text-sm block">Google review link (shown at the top of the WhatsApp message)
           <input className="w-full rounded-lg border px-3 py-2 text-sm" placeholder="https://g.page/r/…/review" value={bill.review_url} onChange={(e) => setBill({ ...bill, review_url: e.target.value })} />
         </label>
         <label className="text-sm block">Closing message on WhatsApp (thank-you, Instagram…)

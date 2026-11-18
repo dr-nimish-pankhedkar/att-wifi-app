@@ -9,8 +9,8 @@ const OPTIONS: { key: Rating; label: string; emoji: string }[] = [
   { key: 'improve', label: 'Needs improvement', emoji: '😕' },
 ];
 
-export default function BillActions({ token, reviewUrl, settled, initialRating, title }: {
-  token: string; reviewUrl: string; settled: boolean; initialRating: Rating | null; title: string;
+export default function BillActions({ token, settled, initialRating, title }: {
+  token: string; settled: boolean; initialRating: Rating | null; title: string;
 }) {
   const [rating, setRating] = useState<Rating | null>(initialRating);
   const [comment, setComment] = useState('');
@@ -52,12 +52,6 @@ export default function BillActions({ token, reviewUrl, settled, initialRating, 
           )}
           {sent && <p className="text-sm text-green-700 mt-2">Thank you for your feedback! 🙏</p>}
 
-          {reviewUrl && (
-            <a href={reviewUrl} target="_blank" rel="noopener noreferrer"
-              className="mt-3 block rounded-lg bg-blue-600 text-white font-semibold py-3">
-              ⭐ Rate us on Google
-            </a>
-          )}
         </section>
       )}
 

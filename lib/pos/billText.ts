@@ -4,22 +4,30 @@ const r = (n: number) => `₹${Number(n).toLocaleString('en-IN', { maximumFracti
 
 export const billUrl = (origin: string, token: string) => `${origin.replace(/\/$/, '')}/b/${token}`;
 
-/** Short WhatsApp message with a link to the full bill page (which has the invoice, PDF and feedback). */
+/**
+ * WhatsApp message: Google review ask first (most customers never open links further down),
+ * then a compact bill summary with the link to the full bill.
+ */
 export function billText(order: OrderRow, bill: BillSettings, origin: string): string {
   const when = new Date(order.settled_at ?? order.created_at).toLocaleString('en-IN', {
     timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true,
   });
   const name = bill.title || 'us';
   const out = [
-    order.customer_name ? `Dear ${order.customer_name},` : 'Hello!',
-    '',
-    `Thank you for visiting *${name}*! Your bill is ready 🧾`,
-    '',
-    `💰 Amount: *${r(Number(order.total))}*`,
-    `📅 ${when} · Bill #${order.bill_no}`,
+    order.customer_name ? `Hi ${order.customer_name.split(' ')[0]}! 👋` : 'Hi there! 👋',
+    `Thank you for visiting *${name}* 🙏`,
   ];
-  if (order.public_token) out.push(`🔗 View bill: ${billUrl(origin, order.public_token)}`);
-  if (order.public_token) out.push('', 'How was your visit? Tap the link to tell us ⭐');
+  if (bill.review_url) {
+    out.push(
+      '',
+      '⭐⭐⭐⭐⭐',
+      '*Enjoyed your visit? Please rate us on Google!*',
+      'It takes just 10 seconds and helps a small café like ours more than you know 💛',
+      `👉 ${bill.review_url}`,
+    );
+  }
+  out.push('', `🧾 *Bill #${order.bill_no}* · ${r(Number(order.total))} · ${when}`);
+  if (order.public_token) out.push(`View bill: ${billUrl(origin, order.public_token)}`);
   if (bill.footer.trim()) out.push('', bill.footer.trim());
   return out.join('\n').trim();
 }
