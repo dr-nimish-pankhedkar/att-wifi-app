@@ -112,7 +112,7 @@ export default function KitchenPage() {
         <div className="flex items-center gap-3 text-sm">
           {!online && <span className="flex items-center gap-1 text-red-400"><CloudOff className="w-4 h-4" /> No internet — retrying</span>}
           <span className="text-white/50">{session.staff.name}</span>
-          <button onClick={() => { setSession(null); setSess(null); }}><LogOut className="w-5 h-5" /></button>
+          <button onClick={() => { if (confirm('Log out of this device? You will need a PIN to log in again.')) { setSession(null); setSess(null); } }}><LogOut className="w-5 h-5" /></button>
         </div>
       </header>
 

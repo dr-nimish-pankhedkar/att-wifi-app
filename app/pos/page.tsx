@@ -104,7 +104,7 @@ export default function CaptainPage() {
         <div className="flex items-center gap-2">
           {!online && <span className="flex items-center gap-1 text-xs text-red-600"><CloudOff className="w-4 h-4" /> Offline</span>}
           <button onClick={() => { refresh(); syncQueue(); }} className="p-2"><RefreshCw className="w-5 h-5" /></button>
-          <button onClick={() => { setSession(null); setSess(null); }} className="p-2"><LogOut className="w-5 h-5" /></button>
+          <button onClick={() => { if (confirm('Log out of this device? You will need a PIN to log in again.')) { setSession(null); setSess(null); } }} className="p-2"><LogOut className="w-5 h-5" /></button>
         </div>
       </header>
 

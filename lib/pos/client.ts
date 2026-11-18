@@ -35,8 +35,21 @@ export async function posLogin(pin: string): Promise<StoredSession> {
 
 export class SessionExpired extends Error {}
 
+const RENEW_WHEN_DAYS_LEFT = 25;
+let renewing = false;
+/** Quietly extend the device session while the app is being used, so staff never have to re-enter the PIN. */
+async function maybeRenew(s: StoredSession) {
+  if (renewing || s.exp * 1000 - Date.now() > RENEW_WHEN_DAYS_LEFT * 86400_000) return;
+  renewing = true;
+  try {
+    const res = await fetch('/api/pos/session', { method: 'POST', headers: { 'x-pos-session': s.token } });
+    if (res.ok) setSession(await res.json());
+  } catch { /* offline: try again next time */ } finally { renewing = false; }
+}
+
 export async function posApi<T = unknown>(url: string, init: RequestInit = {}): Promise<T> {
   const s = getSession();
+  if (s) void maybeRenew(s);
   const res = await fetch(url, {
     ...init,
     headers: { 'Content-Type': 'application/json', ...(s ? { 'x-pos-session': s.token } : {}), ...(init.headers ?? {}) },

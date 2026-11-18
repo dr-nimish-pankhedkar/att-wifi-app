@@ -11,7 +11,8 @@ export interface PosSession {
   exp: number;   // unix seconds
 }
 
-const SESSION_HOURS = 16; // one long shift
+// Devices stay logged in; the app silently renews the session while it is in use.
+export const SESSION_DAYS = 30;
 
 function secret(): string {
   const s = process.env.POS_SESSION_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -24,7 +25,7 @@ function b64url(buf: Buffer | string): string {
 }
 
 export function signPosSession(data: Omit<PosSession, 'exp'>): { token: string; exp: number } {
-  const exp = Math.floor(Date.now() / 1000) + SESSION_HOURS * 3600;
+  const exp = Math.floor(Date.now() / 1000) + SESSION_DAYS * 86400;
   const payload = b64url(JSON.stringify({ ...data, exp }));
   const sig = b64url(createHmac('sha256', secret()).update(payload).digest());
   return { token: `${payload}.${sig}`, exp };
