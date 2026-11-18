@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowLeft, ChefHat, CloudOff, LogOut, Minus, Plus, Receipt, RefreshCw, Search, ShoppingBag, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import { AGGREGATORS_IN_POS, channelPrice, fromPrice, rupee, SOURCE_LABEL, type 
 
 interface OpenOrder { id: string; bill_no: number; source: OrderSource; table_id: string | null; total: number; created_at: string; customer_name: string | null; ready: boolean; pending: boolean }
 interface Floor { areas: Area[]; tables: PosTable[]; open_orders: OpenOrder[] }
-type Target = { kind: 'table'; table: PosTable } | { kind: 'source'; source: OrderSource } | { kind: 'order'; orderId: string };
+type Target = { kind: 'table'; table: PosTable } | { kind: 'source'; source: OrderSource } | { kind: 'order'; orderId: string; openBill?: boolean };
 
 const CACHE_MENU = 'pos.cache.menu';
 const CACHE_FLOOR = 'pos.cache.floor';
@@ -147,15 +147,20 @@ export default function CaptainPage() {
 
       {nonTable.length > 0 && (
         <section className="px-4 mt-5">
-          <h2 className="text-sm font-semibold text-muted-foreground mb-2">Open takeaway / online</h2>
+          <h2 className="text-sm font-semibold text-muted-foreground mb-2">Open takeaway orders</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {nonTable.map((o) => (
-              <button key={o.id} onClick={() => setTarget({ kind: 'order', orderId: o.id })}
-                className={cn('rounded-xl border-2 p-3 text-left bg-white', o.ready ? 'border-green-500 animate-pulse' : 'border-amber-400')}>
-                <div className="font-semibold">{SOURCE_LABEL[o.source]} #{o.bill_no}</div>
-                <div className="text-xs text-muted-foreground truncate">{o.customer_name ?? ''}</div>
-                <div className="text-sm font-medium mt-1">{rupee(o.total)}</div>
-              </button>
+              <div key={o.id} className={cn('rounded-xl border-2 bg-white overflow-hidden', o.ready ? 'border-green-500' : 'border-amber-400')}>
+                <button onClick={() => setTarget({ kind: 'order', orderId: o.id })} className="w-full p-3 text-left">
+                  <div className="font-semibold">{SOURCE_LABEL[o.source]} #{o.bill_no}{o.ready && <span className="ml-1 text-[10px] text-green-700 animate-pulse">READY</span>}</div>
+                  <div className="text-xs text-muted-foreground truncate">{o.customer_name ?? ''}</div>
+                  <div className="text-sm font-medium mt-1">{rupee(o.total)}</div>
+                </button>
+                <button onClick={() => setTarget({ kind: 'order', orderId: o.id, openBill: true })}
+                  className="w-full h-7 bg-stone-900 text-white text-xs font-semibold flex items-center justify-center gap-1">
+                  <Receipt className="w-3 h-3" /> Bill
+                </button>
+              </div>
             ))}
           </div>
         </section>
@@ -172,15 +177,23 @@ export default function CaptainPage() {
               {tables.map((t) => {
                 const o = openByTable.get(t.id);
                 return (
-                  <button key={t.id} onClick={() => setTarget({ kind: 'table', table: t })}
-                    className={cn('aspect-square rounded-xl border-2 flex flex-col items-center justify-center bg-white',
-                      !o && 'border-dashed border-stone-300',
-                      o && !o.ready && 'border-amber-400 bg-amber-50',
-                      o?.ready && 'border-green-500 bg-green-50 animate-pulse')}>
-                    <span className="text-lg font-bold">{t.name}</span>
-                    {o && <span className="text-xs font-medium">{rupee(o.total)}</span>}
-                    {o?.ready && <span className="text-[10px] text-green-700 font-semibold">READY</span>}
-                  </button>
+                  <div key={t.id} className={cn('relative aspect-square rounded-xl border-2 bg-white overflow-hidden',
+                    !o && 'border-dashed border-stone-300',
+                    o && !o.ready && 'border-amber-400 bg-amber-50',
+                    o?.ready && 'border-green-500 bg-green-50')}>
+                    <button onClick={() => setTarget({ kind: 'table', table: t })}
+                      className={cn('absolute inset-0 flex flex-col items-center justify-center', o && 'pb-7')}>
+                      <span className="text-lg font-bold">{t.name}</span>
+                      {o && <span className="text-xs font-medium">{rupee(o.total)}</span>}
+                      {o?.ready && <span className="text-[10px] text-green-700 font-semibold animate-pulse">READY</span>}
+                    </button>
+                    {o && (
+                      <button onClick={() => setTarget({ kind: 'order', orderId: o.id, openBill: true })}
+                        className="absolute bottom-0 inset-x-0 h-7 bg-stone-900 text-white text-xs font-semibold flex items-center justify-center gap-1">
+                        <Receipt className="w-3 h-3" /> Bill
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -211,6 +224,11 @@ function OrderScreen({
   const [sending, setSending] = useState(false);
   const [showCart, setShowCart] = useState(false);
   const [settling, setSettling] = useState(false);
+  // Opened via a table's "Bill" button: jump straight to the bill once the order has loaded.
+  const autoBill = useRef(target.kind === 'order' && !!target.openBill);
+  useEffect(() => {
+    if (autoBill.current && order) { autoBill.current = false; setSettling(true); }
+  }, [order]);
   const [customer, setCustomer] = useState({ name: '', phone: '' });
 
   const tableId = target.kind === 'table' ? target.table.id : order?.table_id ?? null;
