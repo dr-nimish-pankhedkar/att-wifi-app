@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import PinPad from '@/components/kiosk/PinPad';
 import SuccessModal from '@/components/kiosk/SuccessModal';
 import { formatTimeIST, formatDateIST } from '@/lib/time';
-import { Package, Salad, IndianRupee, Banknote } from 'lucide-react';
+import { Package, Salad, IndianRupee, Banknote, ClipboardList, ChefHat } from 'lucide-react';
 
 interface CheckinResult {
   name: string;
@@ -92,6 +92,22 @@ export default function KioskPage() {
 
       {/* Bottom: inventory buttons + hint */}
       <div className="flex flex-col items-center gap-3 pb-2 w-full">
+        <div className="flex gap-3 w-full max-w-xs">
+          <Link
+            href="/pos"
+            className="flex-1 flex items-center justify-center gap-2 bg-amber-500 text-black font-semibold rounded-2xl px-4 py-3 text-sm transition-all active:scale-95"
+          >
+            <ClipboardList className="w-4 h-4" />
+            Take Orders
+          </Link>
+          <Link
+            href="/kitchen"
+            className="flex-1 flex items-center justify-center gap-2 bg-amber-500 text-black font-semibold rounded-2xl px-4 py-3 text-sm transition-all active:scale-95"
+          >
+            <ChefHat className="w-4 h-4" />
+            Kitchen Screen
+          </Link>
+        </div>
         <div className="flex gap-3 w-full max-w-xs">
           <Link
             href="/daily"
