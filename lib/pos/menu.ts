@@ -3,13 +3,14 @@ import type { AddonGroup, CartLineInput, Menu, MenuItem } from './types';
 
 /** Load the full menu. Staff see only active rows; admins can ask for everything. */
 export async function loadMenu(supabase: SupabaseClient, includeInactive = false): Promise<Menu> {
-  const [cats, items, vars, groups, opts, links] = await Promise.all([
+  const [cats, items, vars, groups, opts, links, settings] = await Promise.all([
     supabase.from('menu_categories').select('*').order('sort_order'),
     supabase.from('menu_items').select('*').order('sort_order'),
     supabase.from('menu_variations').select('*').order('sort_order'),
     supabase.from('addon_groups').select('*').order('sort_order'),
     supabase.from('addon_options').select('*').order('sort_order'),
     supabase.from('menu_item_addon_groups').select('*'),
+    supabase.from('settings').select('company_name, bill_title, bill_footer').limit(1).maybeSingle(),
   ]);
   const err = [cats, items, vars, groups, opts, links].find((r) => r.error)?.error;
   if (err) throw new Error(err.message);
@@ -33,7 +34,9 @@ export async function loadMenu(supabase: SupabaseClient, includeInactive = false
       addon_group_ids: (links.data ?? []).filter((l) => l.menu_item_id === i.id).map((l) => l.addon_group_id),
     }));
 
-  return { categories, items: menuItems, addon_groups };
+  const st = settings.data;
+  const bill = { title: st?.bill_title || st?.company_name || '', footer: st?.bill_footer || 'Thank you for visiting!' };
+  return { categories, items: menuItems, addon_groups, bill };
 }
 
 /**

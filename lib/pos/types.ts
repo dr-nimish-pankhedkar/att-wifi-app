@@ -19,7 +19,8 @@ export interface MenuItem {
   variations: Variation[]; addon_group_ids: string[];
 }
 export interface Category { id: string; name: string; sort_order: number; active: boolean }
-export interface Menu { categories: Category[]; items: MenuItem[]; addon_groups: AddonGroup[] }
+export interface BillSettings { title: string; footer: string }
+export interface Menu { categories: Category[]; items: MenuItem[]; addon_groups: AddonGroup[]; bill: BillSettings }
 
 export interface Area { id: string; name: string; sort_order: number; active: boolean }
 export interface PosTable { id: string; name: string; area_id: string | null; seats: number; sort_order: number; active: boolean }

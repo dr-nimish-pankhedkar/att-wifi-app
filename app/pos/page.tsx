@@ -12,7 +12,8 @@ import {
   dropQueued, enqueue, flushQueue, getQueue, getSession, isNetworkError, posApi, SessionExpired, setSession, uid,
   type QueuedOrder, type StoredSession,
 } from '@/lib/pos/client';
-import { rupee, SOURCE_LABEL, type Area, type Menu, type MenuItem, type OrderRow, type OrderSource, type PaymentMode, type PosTable } from '@/lib/pos/types';
+import { billText, whatsappLink } from '@/lib/pos/billText';
+import { rupee, SOURCE_LABEL, type Area, type BillSettings, type Menu, type MenuItem, type OrderRow, type OrderSource, type PaymentMode, type PosTable } from '@/lib/pos/types';
 
 interface OpenOrder { id: string; bill_no: number; source: OrderSource; table_id: string | null; total: number; created_at: string; customer_name: string | null; ready: boolean; pending: boolean }
 interface Floor { areas: Area[]; tables: PosTable[]; open_orders: OpenOrder[] }
@@ -409,7 +410,8 @@ function OrderScreen({
       <ItemOptionsDialog item={picking} groups={menu?.addon_groups ?? []} onClose={() => setPicking(null)} onAdd={addLine} />
 
       {order && (
-        <SettleDialog open={settling} order={order} onClose={() => setSettling(false)} onError={onError}
+        <SettleDialog open={settling} order={order} bill={menu?.bill ?? { title: '', footer: '' }} tableName={tableName}
+          onClose={() => setSettling(false)} onError={onError}
           onDone={(closed) => { setSettling(false); if (closed) onBack(); else loadOrder(); }} />
       )}
     </main>
@@ -427,9 +429,11 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 
 /* ───────────────────────── Settle bill ───────────────────────── */
 
-function SettleDialog({ open, order, onClose, onDone, onError }: {
-  open: boolean; order: OrderRow; onClose: () => void; onDone: (closed: boolean) => void; onError: (e: unknown) => void;
+function SettleDialog({ open, order, bill, tableName, onClose, onDone, onError }: {
+  open: boolean; order: OrderRow; bill: BillSettings; tableName?: string;
+  onClose: () => void; onDone: (closed: boolean) => void; onError: (e: unknown) => void;
 }) {
+  const [paid, setPaid] = useState<OrderRow | null>(null);
   const [discount, setDiscount] = useState('0');
   const [mode, setMode] = useState<PaymentMode>('upi');
   const [cash, setCash] = useState('');
@@ -439,9 +443,11 @@ function SettleDialog({ open, order, onClose, onDone, onError }: {
 
   useEffect(() => {
     if (!open) return;
+    setPaid(null);
     setDiscount(String(order.discount ?? 0)); setName(order.customer_name ?? ''); setPhone(order.customer_phone ?? '');
     setMode(order.source === 'zomato' || order.source === 'swiggy' ? 'online' : 'upi'); setCash('');
-  }, [open, order]);
+    // Only reset when the dialog opens — background refreshes of the order must not wipe the form.
+  }, [open, order.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const subtotal = Number(order.subtotal);
   const disc = Math.min(Math.max(Number(discount) || 0, 0), subtotal);
@@ -452,15 +458,14 @@ function SettleDialog({ open, order, onClose, onDone, onError }: {
     if (phone && phone.replace(/\D/g, '').length < 10) { toast.error('Enter a 10-digit phone number or leave it blank'); return; }
     setBusy(true);
     try {
-      await posApi(`/api/pos/orders/${order.id}`, {
+      const res = await posApi<{ order: OrderRow }>(`/api/pos/orders/${order.id}`, {
         method: 'PATCH',
         body: JSON.stringify({
           action: 'settle', payment_mode: mode, discount: disc, customer_name: name, customer_phone: phone,
           cash_amount: mode === 'split' ? cashN : undefined, upi_amount: mode === 'split' ? Math.round((total - cashN) * 100) / 100 : undefined,
         }),
       });
-      toast.success(`Bill #${order.bill_no} settled · ${rupee(total)}`);
-      onDone(true);
+      setPaid(res.order);
     } catch (e) { onError(e); } finally { setBusy(false); }
   }
 
@@ -476,6 +481,29 @@ function SettleDialog({ open, order, onClose, onDone, onError }: {
   }
 
   const lines = (order.order_items ?? []).filter((l) => l.kot_status !== 'cancelled');
+
+  if (paid) {
+    const link = whatsappLink(phone, billText(paid, bill, tableName));
+    return (
+      <Dialog open={open} onOpenChange={(o) => !o && onDone(true)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Bill #{paid.bill_no} paid · {rupee(Number(paid.total))}</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">{tableName ? `Table ${tableName} is now free.` : 'Order closed.'}</p>
+          <input className="rounded-lg border px-3 py-2 text-sm" placeholder="Customer WhatsApp number" inputMode="numeric"
+            value={phone} onChange={(e) => setPhone(e.target.value)} />
+          {link ? (
+            <a href={link} target="_blank" rel="noopener noreferrer"
+              className="h-12 rounded-md bg-green-600 text-white font-semibold flex items-center justify-center">
+              Send bill on WhatsApp
+            </a>
+          ) : (
+            <p className="text-xs text-muted-foreground">Enter a 10-digit number to send the bill on WhatsApp.</p>
+          )}
+          <Button variant="outline" className="h-12" onClick={() => onDone(true)}>Done</Button>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
