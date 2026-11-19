@@ -8,7 +8,7 @@ export const billUrl = (origin: string, token: string) => `${origin.replace(/\/$
  * WhatsApp message: Google review ask first (most customers never open links further down),
  * then a compact bill summary with the link to the full bill.
  */
-export function billText(order: OrderRow, bill: BillSettings, origin: string): string {
+export function billText(order: OrderRow, bill: BillSettings, origin: string, loyalty?: { name: string; earned: number; balance: number } | null): string {
   const when = new Date(order.settled_at ?? order.created_at).toLocaleString('en-IN', {
     timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true,
   });
@@ -27,7 +27,11 @@ export function billText(order: OrderRow, bill: BillSettings, origin: string): s
     );
   }
   out.push('', `🧾 *Bill #${order.bill_no}* · ${r(Number(order.total))} · ${when}`);
+  if (Number(order.loyalty_redeemed) > 0) out.push(`🎁 ${r(Number(order.loyalty_redeemed))} paid with points`);
   if (order.public_token) out.push(`View bill: ${billUrl(origin, order.public_token)}`);
+  if (loyalty && (loyalty.earned > 0 || loyalty.balance > 0)) {
+    out.push('', `💛 *${loyalty.name}*${loyalty.earned > 0 ? `: you earned *${loyalty.earned} points* today` : ''}`, `Balance: *${loyalty.balance} points* — use them on your next visit!`);
+  }
   if (bill.footer.trim()) out.push('', bill.footer.trim());
   return out.join('\n').trim();
 }

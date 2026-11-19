@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import PosLogin from '@/components/pos/PosLogin';
 import ItemOptionsDialog, { type PickedLine } from '@/components/pos/ItemOptionsDialog';
 import QuickNav from '@/components/pos/QuickNav';
+import CustomerPicker, { forgetCustomers, useCustomers } from '@/components/pos/CustomerPicker';
+import { cleanPhone, earnPoints, maxRedeemPoints, pointsToRupees } from '@/lib/pos/loyalty';
 import { usePosLive } from '@/lib/pos/useLive';
 import { cn } from '@/lib/utils';
 import {
@@ -361,9 +363,8 @@ function OrderScreen({
       )}
 
       {!order && !loadingOrder && target.kind !== 'table' && (
-        <section className="m-3 grid grid-cols-2 gap-2">
-          <input className="rounded-lg border px-3 py-2 text-sm" placeholder="Customer name" value={customer.name} onChange={(e) => setCustomer({ ...customer, name: e.target.value })} />
-          <input className="rounded-lg border px-3 py-2 text-sm" placeholder="Phone" inputMode="numeric" value={customer.phone} onChange={(e) => setCustomer({ ...customer, phone: e.target.value })} />
+        <section className="m-3">
+          <TakeawayCustomer value={customer} onChange={setCustomer} />
         </section>
       )}
 
@@ -485,10 +486,13 @@ function SettleDialog({ open, order, bill, tableName, onClose, onDone, onError }
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [busy, setBusy] = useState(false);
+  const [redeem, setRedeem] = useState(0);
+  const [loyaltyResult, setLoyaltyResult] = useState<{ name: string; earned: number; redeemed: number; balance: number } | null>(null);
+  const dir = useCustomers();
 
   useEffect(() => {
     if (!open) return;
-    setPaid(null);
+    setPaid(null); setRedeem(0); setLoyaltyResult(null);
     setDiscount(String(order.discount ?? 0)); setName(order.customer_name ?? ''); setPhone(order.customer_phone ?? '');
     setMode(order.source === 'zomato' || order.source === 'swiggy' ? 'online' : 'upi'); setCash('');
     // Only reset when the dialog opens — background refreshes of the order must not wipe the form.
@@ -496,21 +500,28 @@ function SettleDialog({ open, order, bill, tableName, onClose, onDone, onError }
 
   const subtotal = Number(order.subtotal);
   const disc = Math.min(Math.max(Number(discount) || 0, 0), subtotal);
-  const total = Math.round((subtotal - disc) * 100) / 100;
+  const cfg = dir?.loyalty;
+  const known = dir?.customers.find((c) => c.phone === cleanPhone(phone));
+  const maxPts = cfg && known ? maxRedeemPoints(cfg, subtotal, disc, known.balance) : 0;
+  const usePts = Math.min(redeem, maxPts);
+  const redeemRs = cfg && usePts > 0 ? pointsToRupees(cfg, usePts) : 0;
+  const total = Math.round((subtotal - disc - redeemRs) * 100) / 100;
   const cashN = Number(cash) || 0;
+  const willEarn = cfg && cleanPhone(phone) ? earnPoints(cfg, { subtotal, discount: disc, total }) : 0;
 
   async function settle() {
     if (phone && phone.replace(/\D/g, '').length < 10) { toast.error('Enter a 10-digit phone number or leave it blank'); return; }
     setBusy(true);
     try {
-      const res = await posApi<{ order: OrderRow }>(`/api/pos/orders/${order.id}`, {
+      const res = await posApi<{ order: OrderRow; loyalty: typeof loyaltyResult }>(`/api/pos/orders/${order.id}`, {
         method: 'PATCH',
         body: JSON.stringify({
-          action: 'settle', payment_mode: mode, discount: disc, customer_name: name, customer_phone: phone,
+          action: 'settle', payment_mode: mode, discount: disc, customer_name: name, customer_phone: phone, redeem_points: usePts,
           cash_amount: mode === 'split' ? cashN : undefined, upi_amount: mode === 'split' ? Math.round((total - cashN) * 100) / 100 : undefined,
         }),
       });
-      setPaid(res.order);
+      setPaid(res.order); setLoyaltyResult(res.loyalty);
+      forgetCustomers(); // balances changed
     } catch (e) { onError(e); } finally { setBusy(false); }
   }
 
@@ -528,12 +539,17 @@ function SettleDialog({ open, order, bill, tableName, onClose, onDone, onError }
   const lines = (order.order_items ?? []).filter((l) => l.kot_status !== 'cancelled');
 
   if (paid) {
-    const link = whatsappLink(phone, billText(paid, bill, window.location.origin));
+    const link = whatsappLink(phone, billText(paid, bill, window.location.origin, loyaltyResult));
     return (
       <Dialog open={open} onOpenChange={(o) => !o && onDone(true)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Bill #{paid.bill_no} paid · {rupee(Number(paid.total))}</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">{tableName ? `Table ${tableName} is now free.` : 'Order closed.'}</p>
+          {loyaltyResult && (
+            <p className="text-sm rounded-lg bg-amber-50 px-3 py-2">
+              🎁 {loyaltyResult.redeemed > 0 && `Used ${loyaltyResult.redeemed} pts · `}Earned <b>{loyaltyResult.earned}</b> pts · Balance <b>{loyaltyResult.balance}</b>
+            </p>
+          )}
           <input className="rounded-lg border px-3 py-2 text-sm" placeholder="Customer WhatsApp number" inputMode="numeric"
             value={phone} onChange={(e) => setPhone(e.target.value)} />
           {link ? (
@@ -565,13 +581,36 @@ function SettleDialog({ open, order, bill, tableName, onClose, onDone, onError }
           <div className="flex justify-between items-center"><span>Discount ₹</span>
             <input className="w-24 rounded border px-2 py-1 text-right" inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} />
           </div>
+          {redeemRs > 0 && <div className="flex justify-between text-green-700"><span>Points used ({usePts})</span><span>−{rupee(redeemRs)}</span></div>}
           <div className="flex justify-between text-lg font-bold"><span>Total</span><span>{rupee(total)}</span></div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <input className="rounded-lg border px-3 py-2 text-sm" placeholder="Customer name" value={name} onChange={(e) => setName(e.target.value)} />
-          <input className="rounded-lg border px-3 py-2 text-sm" placeholder="Phone (for review msg)" inputMode="numeric" value={phone} onChange={(e) => setPhone(e.target.value)} />
-        </div>
+        <CustomerPicker name={name} phone={phone} customers={dir?.customers} showBalance={!!cfg?.enabled}
+          onChange={(v) => { setName(v.name); setPhone(v.phone); setRedeem(0); }} />
+
+        {cfg?.enabled && known && (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span>🎁 <b>{known.balance}</b> points available</span>
+              {maxPts > 0 ? (
+                usePts > 0
+                  ? <button className="text-xs underline" onClick={() => setRedeem(0)}>Don’t use</button>
+                  : <Button size="sm" className="h-8" onClick={() => setRedeem(maxPts)}>Use {maxPts} pts (−{rupee(pointsToRupees(cfg, maxPts))})</Button>
+              ) : (
+                <span className="text-xs text-muted-foreground">{subtotal < cfg.redeem_min_core ? `Usable on bills of ${rupee(cfg.redeem_min_core)}+` : 'Not usable on this bill'}</span>
+              )}
+            </div>
+            {usePts > 0 && (
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-xs">Points to use</span>
+                <input className="w-20 rounded border px-2 py-1 text-right" inputMode="numeric" value={usePts}
+                  onChange={(e) => setRedeem(Math.max(0, Math.floor(Number(e.target.value) || 0)))} />
+                <span className="text-xs text-muted-foreground">max {maxPts}</span>
+              </div>
+            )}
+          </div>
+        )}
+        {cfg?.enabled && willEarn > 0 && <p className="text-xs text-muted-foreground -mt-1">Customer will earn {willEarn} points on this bill.</p>}
 
         <div className={cn('grid gap-2', AGGREGATORS_IN_POS || order.source === 'zomato' || order.source === 'swiggy' ? 'grid-cols-4' : 'grid-cols-3')}>
           {((AGGREGATORS_IN_POS || order.source === 'zomato' || order.source === 'swiggy' ? ['cash', 'upi', 'split', 'online'] : ['cash', 'upi', 'split']) as PaymentMode[]).map((m) => (
@@ -596,4 +635,9 @@ function SettleDialog({ open, order, bill, tableName, onClose, onDone, onError }
       </DialogContent>
     </Dialog>
   );
+}
+
+function TakeawayCustomer({ value, onChange }: { value: { name: string; phone: string }; onChange: (v: { name: string; phone: string }) => void }) {
+  const dir = useCustomers();
+  return <CustomerPicker name={value.name} phone={value.phone} customers={dir?.customers} showBalance={!!dir?.loyalty.enabled} onChange={onChange} />;
 }

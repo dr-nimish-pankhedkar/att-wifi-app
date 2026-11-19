@@ -12,9 +12,10 @@ import { createClient } from '@/lib/supabase/client';
 import { authFetch } from '@/lib/supabase/authFetch';
 import { cn } from '@/lib/utils';
 import { billText, whatsappLink } from '@/lib/pos/billText';
+import { normaliseLoyalty, type LoyaltyConfig } from '@/lib/pos/loyalty';
 import { AGGREGATORS_IN_POS, fromPrice, rupee, SOURCE_LABEL, type BillSettings, type AddonGroup, type Area, type Category, type Menu, type MenuItem, type OrderRow, type PosTable } from '@/lib/pos/types';
 
-type Tab = 'floor' | 'menu' | 'addons' | 'sales' | 'bill';
+type Tab = 'floor' | 'menu' | 'addons' | 'sales' | 'bill' | 'loyalty';
 
 async function api<T = unknown>(url: string, method = 'GET', body?: unknown): Promise<T> {
   const res = await authFetch(url, { method, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -54,7 +55,7 @@ export default function PosAdminPage() {
         <h1 className="text-2xl font-bold mb-1">POS setup</h1>
         <p className="text-sm text-muted-foreground mb-4">Tables, menu and add-ons used by the captain app (/pos) and kitchen screen (/kitchen).</p>
         <div className="flex gap-2 mb-5 overflow-x-auto">
-          {([['floor', 'Floor & tables'], ['menu', 'Menu'], ['addons', 'Add-ons'], ['sales', 'Bills'], ['bill', 'Bill & WhatsApp']] as [Tab, string][]).map(([k, l]) => (
+          {([['floor', 'Floor & tables'], ['menu', 'Menu'], ['addons', 'Add-ons'], ['sales', 'Bills'], ['loyalty', 'Loyalty & customers'], ['bill', 'Bill & WhatsApp']] as [Tab, string][]).map(([k, l]) => (
             <button key={k} onClick={() => setTab(k)} className={cn('px-4 py-2 rounded-lg text-sm font-medium border shrink-0', tab === k ? 'bg-primary text-primary-foreground border-primary' : 'bg-background')}>{l}</button>
           ))}
         </div>
@@ -63,6 +64,7 @@ export default function PosAdminPage() {
         {ready && tab === 'addons' && <AddonsTab />}
         {ready && tab === 'sales' && <BillsTab />}
         {ready && tab === 'bill' && <BillMessageTab />}
+        {ready && tab === 'loyalty' && <LoyaltyTab />}
       </main>
     </div>
   );
@@ -592,6 +594,136 @@ function OnlinePriceTool({ onDone }: { onDone: () => void }) {
         <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Close</Button>
       </div>
       <p className="text-xs text-muted-foreground">Fine-tune any single item afterwards with ✏️ → Online prices.</p>
+    </div>
+  );
+}
+
+/* ───────────── Loyalty & customers ───────────── */
+
+function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <label className="grid sm:grid-cols-[220px_1fr] gap-1 sm:gap-3 items-start text-sm py-1.5">
+      <span className="font-medium pt-2">{label}{hint && <span className="block text-xs font-normal text-muted-foreground">{hint}</span>}</span>
+      <div>{children}</div>
+    </label>
+  );
+}
+
+interface CustomerRow { id: string; phone: string; name: string | null; visits: number; total_spent: number; last_visit_at: string | null; balance: number }
+
+function LoyaltyTab() {
+  const [cfg, setCfg] = useState<LoyaltyConfig | null>(null);
+  const [customers, setCustomers] = useState<CustomerRow[]>([]);
+  const [q, setQ] = useState('');
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => {
+    try {
+      const r = await api<{ loyalty: LoyaltyConfig; customers: CustomerRow[] }>('/api/pos/customers');
+      setCfg(r.loyalty); setCustomers(r.customers);
+    } catch (e) { fail(e); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+  if (!cfg) return <p className="text-muted-foreground">Loading…</p>;
+
+  const set = <K extends keyof LoyaltyConfig>(k: K, v: LoyaltyConfig[K]) => setCfg({ ...cfg, [k]: v });
+  const num = (k: keyof LoyaltyConfig) => (e: React.ChangeEvent<HTMLInputElement>) => set(k, (e.target.value === '' ? 0 : Number(e.target.value)) as never);
+  async function save() {
+    setBusy(true);
+    try { const r = await api<{ loyalty: LoyaltyConfig }>('/api/pos/admin/loyalty', 'PATCH', normaliseLoyalty(cfg)); setCfg(r.loyalty); toast.success('Loyalty settings saved'); }
+    catch (e) { fail(e); } finally { setBusy(false); }
+  }
+  async function adjust(c: Partial<CustomerRow>) {
+    const phone = c.phone ?? prompt('Customer mobile number') ?? '';
+    if (!phone) return;
+    const pts = prompt(`Points to add for ${c.name ?? phone} (use a minus sign to remove, e.g. -20)`);
+    if (!pts) return;
+    const note = prompt('Reason (e.g. "birthday gift", "correction")');
+    if (!note) return;
+    try { await api('/api/pos/admin/loyalty/adjust', 'POST', { phone, name: c.name, points: Number(pts), note }); toast.success('Points updated'); load(); }
+    catch (e) { fail(e); }
+  }
+
+  const term = q.trim().toLowerCase();
+  const shown = customers.filter((c) => !term || c.phone.includes(term) || c.name?.toLowerCase().includes(term)).slice(0, 200);
+  const outstanding = customers.reduce((a, c) => a + Math.max(0, c.balance), 0);
+  const inp = 'w-full rounded-lg border px-3 py-2 text-sm';
+
+  return (
+    <div className="space-y-6">
+      <section className="rounded-xl border p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="font-semibold">Loyalty programme</h2>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={cfg.enabled} onChange={(e) => set('enabled', e.target.checked)} /> Active</label>
+        </div>
+        <Row label="Programme name"><input className={inp} value={cfg.name} onChange={(e) => set('name', e.target.value)} /></Row>
+
+        <h3 className="text-sm font-semibold mt-4 mb-1">Earning points</h3>
+        <Row label="Points given (%)" hint="e.g. 10 = ₹100 bill earns 10 points"><input className={inp} inputMode="decimal" value={cfg.earn_percent} onChange={num('earn_percent')} /></Row>
+        <Row label="Calculated on">
+          <select className={inp} value={cfg.earn_basis} onChange={(e) => set('earn_basis', e.target.value as LoyaltyConfig['earn_basis'])}>
+            <option value="core">Items total (before discount)</option>
+            <option value="core_minus_discount">Items total minus discount</option>
+            <option value="total">Final amount paid</option>
+          </select>
+        </Row>
+        <Row label="Min bill to earn (₹)" hint="0 = any bill"><input className={inp} inputMode="decimal" value={cfg.min_order} onChange={num('min_order')} /></Row>
+        <Row label="Max points per bill" hint="0 = no limit"><input className={inp} inputMode="decimal" value={cfg.max_points_per_order} onChange={num('max_points_per_order')} /></Row>
+        <Row label="Points expire after (days)" hint="0 = never"><input className={inp} inputMode="numeric" value={cfg.expiry_days} onChange={num('expiry_days')} /></Row>
+        <Row label="No points on discounted bills"><input type="checkbox" className="mt-2" checked={cfg.skip_discounted} onChange={(e) => set('skip_discounted', e.target.checked)} /></Row>
+
+        <h3 className="text-sm font-semibold mt-4 mb-1">Using points</h3>
+        <Row label="Allow using points"><input type="checkbox" className="mt-2" checked={cfg.redeem_enabled} onChange={(e) => set('redeem_enabled', e.target.checked)} /></Row>
+        <Row label="Limit per bill">
+          <div className="flex gap-2">
+            <select className="rounded-lg border px-2 py-2 text-sm" value={cfg.redeem_mode} onChange={(e) => set('redeem_mode', e.target.value as LoyaltyConfig['redeem_mode'])}>
+              <option value="percent">% of items total</option><option value="fixed">Fixed ₹</option>
+            </select>
+            <input className={inp} inputMode="decimal" value={cfg.redeem_value} onChange={num('redeem_value')} />
+          </div>
+        </Row>
+        <Row label="Min bill to use points (₹)"><input className={inp} inputMode="decimal" value={cfg.redeem_min_core} onChange={num('redeem_min_core')} /></Row>
+        <Row label="Max points per bill" hint="0 = no limit"><input className={inp} inputMode="decimal" value={cfg.redeem_max_points} onChange={num('redeem_max_points')} /></Row>
+        <Row label="Points per ₹1" hint="1 = 1 point is worth ₹1"><input className={inp} inputMode="decimal" value={cfg.points_per_rupee} onChange={num('points_per_rupee')} /></Row>
+
+        <p className="text-xs text-muted-foreground mt-2">
+          Example with these settings: a ₹{Math.max(cfg.redeem_min_core, 250)} bill earns {Math.round(Math.max(cfg.redeem_min_core, 250) * cfg.earn_percent) / 100} points,
+          and a customer can use up to {cfg.redeem_mode === 'percent' ? `${cfg.redeem_value}% of the bill` : `₹${cfg.redeem_value}`}
+          {cfg.redeem_max_points > 0 ? ` (max ${cfg.redeem_max_points} points)` : ''} on bills of ₹{cfg.redeem_min_core}+.
+        </p>
+        <Button className="mt-3" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save loyalty settings'}</Button>
+      </section>
+
+      <section className="rounded-xl border p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h2 className="font-semibold">Customers <span className="text-sm font-normal text-muted-foreground">· {customers.length} · {Math.round(outstanding).toLocaleString('en-IN')} points outstanding</span></h2>
+          <div className="flex gap-2">
+            <input className="rounded-lg border px-3 py-1.5 text-sm" placeholder="Search name or number" value={q} onChange={(e) => setQ(e.target.value)} />
+            <Button size="sm" variant="outline" onClick={() => adjust({})}>Add points</Button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="text-left text-xs text-muted-foreground border-b">
+              <th className="py-1.5 font-medium">Name</th><th className="font-medium">Mobile</th>
+              <th className="font-medium text-right">Points</th><th className="font-medium text-right">Visits</th>
+              <th className="font-medium text-right">Spent</th><th></th>
+            </tr></thead>
+            <tbody>
+              {shown.map((c) => (
+                <tr key={c.id} className="border-b last:border-0">
+                  <td className="py-1.5">{c.name || '—'}</td>
+                  <td className="tabular-nums">{c.phone}</td>
+                  <td className={cn('text-right tabular-nums', c.balance > 0 && 'text-amber-700 font-medium')}>{c.balance}</td>
+                  <td className="text-right tabular-nums">{c.visits}</td>
+                  <td className="text-right tabular-nums">{rupee(c.total_spent)}</td>
+                  <td className="text-right"><button className="text-xs underline" onClick={() => adjust(c)}>Adjust</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {customers.length > shown.length && !term && <p className="text-xs text-muted-foreground mt-2">Showing the 200 most recent — search to find others.</p>}
+        </div>
+      </section>
     </div>
   );
 }

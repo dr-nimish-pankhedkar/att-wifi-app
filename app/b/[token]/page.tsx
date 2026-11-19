@@ -20,7 +20,7 @@ export default async function BillPage({ params }: { params: { token: string } }
   const supabase = createAdminClient();
   const [{ data: o }, { data: st }] = await Promise.all([
     supabase.from('orders')
-      .select('bill_no, source, status, customer_name, subtotal, discount, total, payment_mode, created_at, settled_at, feedback_rating, pos_tables(name), profiles!captain_id(name), order_items(id, name, variation_name, addons, price, qty, kot_status, created_at)')
+      .select('bill_no, source, status, customer_name, subtotal, discount, loyalty_redeemed, loyalty_earned, total, payment_mode, created_at, settled_at, feedback_rating, pos_tables(name), profiles!captain_id(name), order_items(id, name, variation_name, addons, price, qty, kot_status, created_at)')
       .eq('public_token', params.token).maybeSingle(),
     supabase.from('settings').select('company_name, bill_title, bill_address, bill_phone, bill_fssai, review_url').limit(1).maybeSingle(),
   ]);
@@ -80,9 +80,11 @@ export default async function BillPage({ params }: { params: { token: string } }
           <div className="flex justify-between text-stone-600"><span>Items</span><span>{qty}</span></div>
           <div className="flex justify-between"><span>Subtotal</span><span>{r(Number(o.subtotal))}</span></div>
           {Number(o.discount) > 0 && <div className="flex justify-between text-green-700"><span>Discount</span><span>−{r(Number(o.discount))}</span></div>}
+          {Number(o.loyalty_redeemed) > 0 && <div className="flex justify-between text-green-700"><span>Loyalty points used</span><span>−{r(Number(o.loyalty_redeemed))}</span></div>}
           <div className="flex justify-between text-lg font-bold pt-1"><span>Total</span><span>{r(Number(o.total))}</span></div>
           {o.status === 'settled' && o.payment_mode && <p className="text-stone-600">Paid via {PAY[o.payment_mode]}</p>}
           {o.status === 'open' && <p className="text-amber-700">Payment pending</p>}
+          {Number(o.loyalty_earned) > 0 && <p className="text-amber-700">🎁 You earned {Number(o.loyalty_earned)} loyalty points on this bill</p>}
         </div>
 
         {st?.bill_fssai && <p className="text-center text-xs text-stone-500 mt-4">FSSAI: {st.bill_fssai}</p>}
