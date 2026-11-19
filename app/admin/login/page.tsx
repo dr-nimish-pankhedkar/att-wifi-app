@@ -26,7 +26,7 @@ export default function AdminLoginPage() {
         toast.error(error.message);
       } else {
         toast.success('Logged in');
-        router.push('/admin/dashboard');
+        router.push('/admin/finance');
         router.refresh();
       }
     } finally {

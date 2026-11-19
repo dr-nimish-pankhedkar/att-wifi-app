@@ -2,14 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, FileText, Settings, LogOut, Menu, X, CalendarDays, Package, Salad, BarChart2, IndianRupee, UtensilsCrossed } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Settings, LogOut, Menu, X, CalendarDays, Package, Salad, BarChart2, IndianRupee, UtensilsCrossed, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 
 const NAV = [
-  { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
+  { label: 'Finance dashboard', href: '/admin/finance', icon: Wallet },
+  { label: 'Attendance dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
   { label: 'Staff', href: '/admin/staff', icon: Users },
   { label: 'Schedule', href: '/admin/schedule', icon: CalendarDays },
   { label: 'POS setup', href: '/admin/pos', icon: UtensilsCrossed },
