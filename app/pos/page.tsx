@@ -382,8 +382,8 @@ function OrderScreen({
       </div>
 
       {!menu && <p className="p-4 text-center text-muted-foreground text-sm">Loading menu…</p>}
-      <div className="px-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-        {items.map((i) => {
+      {(() => {
+        const tile = (i: MenuItem) => {
           const inCart = cart.filter((l) => l.item.id === i.id).reduce((s, l) => s + l.qty, 0);
           return (
             <button key={i.id} onClick={() => addSimple(i)} disabled={!i.in_stock}
@@ -399,8 +399,23 @@ function OrderScreen({
               {inCart > 0 && <span className="absolute bottom-2 right-2 text-xs font-bold text-primary">×{inCart}</span>}
             </button>
           );
-        })}
-      </div>
+        };
+        const grid = 'px-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2';
+        // "All" without a search: sectioned like the printed menu card.
+        if (cat === 'all' && !q.trim() && menu) {
+          return menu.categories.map((c) => {
+            const list = items.filter((i) => i.category_id === c.id);
+            if (!list.length) return null;
+            return (
+              <section key={c.id} className="mb-4">
+                <h3 className="px-3 pb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">{c.name}</h3>
+                <div className={grid}>{list.map(tile)}</div>
+              </section>
+            );
+          });
+        }
+        return <div className={grid}>{items.map(tile)}</div>;
+      })()}
 
       {/* Cart bar */}
       {cart.length > 0 && (
