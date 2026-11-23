@@ -18,7 +18,7 @@ export async function getSessionUser(request?: NextRequest): Promise<User | null
     const { data: { user } } = await createAdminClient().auth.getUser(authHeader.slice(7));
     if (user) return user;
   }
-  const { data: { user } } = await createClient().auth.getUser();
+  const { data: { user } } = await (await createClient()).auth.getUser();
   return user;
 }
 

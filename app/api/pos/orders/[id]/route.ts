@@ -12,7 +12,8 @@ import type { PaymentMode } from '@/lib/pos/types';
 
 const MODES: PaymentMode[] = ['cash', 'upi', 'split', 'online'];
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   if (!(await requirePosUser(request))) return unauthorized();
   const { data, error } = await createAdminClient().from('orders').select(ORDER_SELECT).eq('id', params.id).maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -27,7 +28,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
  *  { action: 'cancel', reason }
  *  { action: 'reopen' }   (admins only, for a settled bill entered wrongly)
  */
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const actor = await requirePosUser(request);
   if (!actor) return unauthorized();
   const body = await request.json().catch(() => null);

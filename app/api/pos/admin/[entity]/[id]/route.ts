@@ -6,9 +6,10 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { bad, requirePosAdmin, unauthorized } from '@/lib/pos/auth';
 import { ENTITIES, cleanFields } from '@/lib/pos/adminEntities';
 
-type Ctx = { params: { entity: string; id: string } };
+type Ctx = { params: Promise<{ entity: string; id: string }> };
 
-export async function PATCH(request: NextRequest, { params }: Ctx) {
+export async function PATCH(request: NextRequest, props: Ctx) {
+  const params = await props.params;
   if (!(await requirePosAdmin(request))) return unauthorized();
   const def = ENTITIES[params.entity];
   if (!def) return bad('Unknown type', 404);
@@ -25,7 +26,8 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
 }
 
 /** DELETE — hard delete if unused; otherwise hide it (so old bills keep their history) or explain why not. */
-export async function DELETE(request: NextRequest, { params }: Ctx) {
+export async function DELETE(request: NextRequest, props: Ctx) {
+  const params = await props.params;
   if (!(await requirePosAdmin(request))) return unauthorized();
   const def = ENTITIES[params.entity];
   if (!def) return bad('Unknown type', 404);

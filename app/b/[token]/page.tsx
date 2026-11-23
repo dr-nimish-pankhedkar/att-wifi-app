@@ -15,7 +15,8 @@ const PAY: Record<string, string> = { cash: 'Cash', upi: 'UPI', split: 'Cash + U
 interface Line { id: string; name: string; variation_name: string | null; addons: { name: string; price: number }[]; price: number; qty: number; kot_status: string; created_at: string }
 
 /** Public, read-only bill page sent to customers on WhatsApp. Unguessable token; no customer phone shown. */
-export default async function BillPage({ params }: { params: { token: string } }) {
+export default async function BillPage(props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   if (!/^[0-9a-f]{16}$/.test(params.token)) notFound();
   const supabase = createAdminClient();
   const [{ data: o }, { data: st }] = await Promise.all([

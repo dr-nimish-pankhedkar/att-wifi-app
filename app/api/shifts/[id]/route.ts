@@ -8,8 +8,9 @@ async function requireAdmin() {
   return user;
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
-  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function PUT(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  if (!(await requireAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json().catch(() => null);
   if (!body) return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
@@ -33,8 +34,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   return NextResponse.json({ shift: data });
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
-  if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  if (!(await requireAdmin())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const supabase = createAdminClient();
   // Unassign shift from any staff first

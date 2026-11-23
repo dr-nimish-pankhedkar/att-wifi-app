@@ -4,7 +4,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/supabase/serverAuth';
 
 /** PUT — update an inventory item */
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await requireAuth(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -35,10 +36,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 }
 
 /** DELETE — soft-delete (set active=false) or hard-delete */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const user = await requireAuth(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

@@ -7,7 +7,8 @@ import { bad, requirePosAdmin, unauthorized } from '@/lib/pos/auth';
 import { ENTITIES, cleanFields } from '@/lib/pos/adminEntities';
 
 /** POST — create a row (area, table, category, add-on group, add-on option). */
-export async function POST(request: NextRequest, { params }: { params: { entity: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ entity: string }> }) {
+  const params = await props.params;
   if (!(await requirePosAdmin(request))) return unauthorized();
   const def = ENTITIES[params.entity];
   if (!def) return bad('Unknown type', 404);

@@ -5,7 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 const RATINGS = ['loved', 'okay', 'improve'];
 
 /** POST { rating, comment? } — customer feedback from the public bill page. */
-export async function POST(request: NextRequest, { params }: { params: { token: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   if (!/^[0-9a-f]{16}$/.test(params.token)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const body = await request.json().catch(() => null);
   if (!body || !RATINGS.includes(body.rating)) return NextResponse.json({ error: 'Invalid rating' }, { status: 400 });

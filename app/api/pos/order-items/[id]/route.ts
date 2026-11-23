@@ -10,7 +10,8 @@ import type { KotStatus } from '@/lib/pos/types';
 const STATUSES: KotStatus[] = ['new', 'preparing', 'ready', 'served', 'cancelled'];
 
 /** PATCH { kot_status } — kitchen moves items along; captain marks served or cancels a line. */
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const actor = await requirePosUser(request);
   if (!actor) return unauthorized();
   const body = await request.json().catch(() => null);

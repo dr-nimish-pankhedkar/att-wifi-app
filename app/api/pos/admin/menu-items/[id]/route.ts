@@ -12,7 +12,8 @@ import { notifyPos } from '@/lib/pos/notify';
  * PATCH — admins edit anything. Any logged-in staff may flip only `in_stock`
  * (so the captain/kitchen can mark an item "finished for today").
  */
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const body = await request.json().catch(() => null);
   if (!body) return bad('Invalid body');
   const admin = await requirePosAdmin(request);
@@ -29,7 +30,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 }
 
 /** DELETE — removes the item if it was never sold; otherwise hides it so old bills keep their history. */
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   if (!(await requirePosAdmin(request))) return unauthorized();
   const supabase = createAdminClient();
   const { count } = await supabase.from('order_items').select('*', { count: 'exact', head: true }).eq('menu_item_id', params.id);
