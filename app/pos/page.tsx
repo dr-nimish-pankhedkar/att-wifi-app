@@ -260,6 +260,7 @@ function OrderScreen({
   }, [menu, cat, q]);
 
   const cartTotal = cart.reduce((s, l) => s + l.unit * l.qty, 0);
+  useEffect(() => { if (!cart.length) setShowCart(false); }, [cart.length]);
   const cartCount = cart.reduce((s, l) => s + l.qty, 0);
 
   function addSimple(item: MenuItem) {
@@ -418,38 +419,56 @@ function OrderScreen({
         return <div className={grid}>{items.map(tile)}</div>;
       })()}
 
-      {/* Cart bar */}
+      {/* Cart bar → review screen (captain repeats the order to the customer before it goes to the kitchen) */}
       {cart.length > 0 && (
-        <div className="fixed bottom-0 inset-x-0 z-30 bg-white border-t p-3 flex gap-2">
-          <Button variant="outline" className="flex-1 h-12" onClick={() => setShowCart(true)}>
-            {cartCount} item{cartCount > 1 ? 's' : ''} · {rupee(cartTotal)}
-          </Button>
-          <Button className="flex-1 h-12" disabled={sending} onClick={sendKot}>
-            <ChefHat className="w-4 h-4 mr-1" /> {sending ? 'Sending…' : 'Send KOT'}
+        <div className="fixed bottom-0 inset-x-0 z-30 bg-white border-t p-3">
+          <Button className="w-full h-12 text-base" onClick={() => setShowCart(true)}>
+            Review order · {cartCount} item{cartCount > 1 ? 's' : ''} · {rupee(cartTotal)}
           </Button>
         </div>
       )}
 
       <Dialog open={showCart} onOpenChange={setShowCart}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>New items for {title}</DialogTitle></DialogHeader>
-          {cart.map((l, idx) => (
-            <div key={idx} className="flex items-center gap-2 border-b pb-2">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">{l.item.name}{l.variation_name ? ` (${l.variation_name})` : ''}</p>
-                {(l.addons.length > 0 || l.note) && <p className="text-xs text-muted-foreground">{[l.addons.map((a) => a.name).join(', '), l.note].filter(Boolean).join(' · ')}</p>}
-                <p className="text-xs">{rupee(l.unit * l.qty)}</p>
-              </div>
-              <button className="h-8 w-8 rounded-full border flex items-center justify-center"
-                onClick={() => setCart((c) => c.flatMap((x, i) => (i !== idx ? [x] : x.qty > 1 ? [{ ...x, qty: x.qty - 1 }] : [])))}><Minus className="w-3 h-3" /></button>
-              <span className="w-5 text-center text-sm">{l.qty}</span>
-              <button className="h-8 w-8 rounded-full border flex items-center justify-center"
-                onClick={() => setCart((c) => c.map((x, i) => (i === idx ? { ...x, qty: Math.min(99, x.qty + 1) } : x)))}><Plus className="w-3 h-3" /></button>
-            </div>
-          ))}
-          <Button className="h-12" disabled={sending || !cart.length} onClick={sendKot}>
-            <ChefHat className="w-4 h-4 mr-1" /> Send KOT · {rupee(cartTotal)}
-          </Button>
+        <DialogContent className="max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Confirm order · {title}</DialogTitle>
+            <p className="text-sm text-muted-foreground">Read this back to the customer, then send it to the kitchen.</p>
+          </DialogHeader>
+          <ul className="divide-y">
+            {cart.map((l, idx) => (
+              <li key={idx} className="py-3">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl font-bold w-8 text-center shrink-0">{l.qty}×</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-base font-semibold leading-tight">{l.item.name}</p>
+                    {l.variation_name && <p className={cn('text-sm', l.variation_name !== 'Regular' && 'font-semibold text-red-700')}>{l.variation_name}</p>}
+                    {l.addons.length > 0 && <p className="text-sm text-muted-foreground">+ {l.addons.map((a) => a.name).join(', ')}</p>}
+                    <input className="mt-1 w-full rounded border px-2 py-1 text-sm" placeholder="Note for kitchen (e.g. less spicy)" maxLength={200}
+                      value={l.note} onChange={(e) => setCart((c) => c.map((x, i) => (i === idx ? { ...x, note: e.target.value } : x)))} />
+                  </div>
+                  <span className="text-sm font-medium shrink-0">{rupee(l.unit * l.qty)}</span>
+                </div>
+                <div className="flex items-center justify-end gap-2 mt-2">
+                  <button className="text-xs text-red-600 mr-auto pl-11" onClick={() => setCart((c) => c.filter((_, i) => i !== idx))}>Remove</button>
+                  <button className="h-9 w-9 rounded-full border flex items-center justify-center"
+                    onClick={() => setCart((c) => c.flatMap((x, i) => (i !== idx ? [x] : x.qty > 1 ? [{ ...x, qty: x.qty - 1 }] : [])))}><Minus className="w-4 h-4" /></button>
+                  <span className="w-6 text-center font-semibold">{l.qty}</span>
+                  <button className="h-9 w-9 rounded-full border flex items-center justify-center"
+                    onClick={() => setCart((c) => c.map((x, i) => (i === idx ? { ...x, qty: Math.min(99, x.qty + 1) } : x)))}><Plus className="w-4 h-4" /></button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="flex justify-between text-base font-bold border-t pt-2">
+            <span>{cartCount} item{cartCount === 1 ? '' : 's'}</span><span>{rupee(cartTotal)}</span>
+          </div>
+          {order && <p className="text-xs text-muted-foreground -mt-2">This is an add-on to bill #{order.bill_no}; earlier items are already with the kitchen.</p>}
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" className="h-12" onClick={() => setShowCart(false)}><Plus className="w-4 h-4 mr-1" /> Add more</Button>
+            <Button className="h-12" disabled={sending || !cart.length} onClick={sendKot}>
+              <ChefHat className="w-4 h-4 mr-1" /> {sending ? 'Sending…' : 'Confirm & send'}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
