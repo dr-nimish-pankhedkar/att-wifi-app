@@ -74,7 +74,8 @@ export interface OrderRow {
   customer_name: string | null; customer_phone: string | null; subtotal: number; discount: number; total: number;
   payment_mode: PaymentMode | null; cash_amount: number; upi_amount: number; notes: string | null;
   created_at: string; settled_at: string | null; captain_id: string | null;
-  public_token?: string; customer_id?: string | null; loyalty_redeemed?: number; loyalty_earned?: number; feedback_rating?: 'loved' | 'okay' | 'improve' | null; feedback_comment?: string | null;
+  public_token?: string; cancel_reason?: string | null;
+  taken_by?: { name: string } | null; settled_by_profile?: { name: string } | null; cancelled_by_profile?: { name: string } | null; customer_id?: string | null; loyalty_redeemed?: number; loyalty_earned?: number; feedback_rating?: 'loved' | 'okay' | 'improve' | null; feedback_comment?: string | null;
   order_items?: OrderItemRow[];
 }
 

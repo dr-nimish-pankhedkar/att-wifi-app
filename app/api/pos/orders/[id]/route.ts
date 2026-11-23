@@ -50,7 +50,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (body.action === 'reopen') {
     if (!actor.isAdmin) return bad('Only an admin can reopen a bill', 403);
     if (order.status !== 'settled') return bad('Only settled bills can be reopened');
-    Object.assign(patch, { status: 'open', settled_at: null, payment_mode: null, cash_amount: 0, upi_amount: 0, loyalty_redeemed: 0, loyalty_earned: 0 });
+    Object.assign(patch, { status: 'open', settled_at: null, settled_by: null, payment_mode: null, cash_amount: 0, upi_amount: 0, loyalty_redeemed: 0, loyalty_earned: 0 });
     // Undo the points this bill earned/used, and its visit.
     await supabase.from('loyalty_ledger').delete().eq('order_id', order.id);
     if (order.customer_id) {
@@ -69,7 +69,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     if (body.action === 'cancel') {
       if (!body.reason?.toString().trim()) return bad('Give a reason for cancelling');
-      Object.assign(patch, { status: 'cancelled', cancel_reason: body.reason.toString().slice(0, 200) });
+      Object.assign(patch, { status: 'cancelled', cancel_reason: body.reason.toString().slice(0, 200), cancelled_by: actor.staffId });
       await supabase.from('order_items').update({ kot_status: 'cancelled' }).eq('order_id', order.id).in('kot_status', ['new', 'preparing', 'ready']);
     }
   }
@@ -121,7 +121,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
     const { error } = await supabase
       .from('orders')
-      .update({ status: 'settled', payment_mode: mode, cash_amount: cash, upi_amount: upi, settled_at: new Date().toISOString() })
+      .update({ status: 'settled', payment_mode: mode, cash_amount: cash, upi_amount: upi, settled_at: new Date().toISOString(), settled_by: actor.staffId })
       .eq('id', order.id).eq('status', 'open');
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     // Anything still on the kitchen board for a paid bill is treated as served.

@@ -476,6 +476,11 @@ function BillsTab() {
                   </div>
                 ))}
                 {o.customer_phone && <p>Phone: {o.customer_phone}</p>}
+                <p className="text-xs">
+                  {o.taken_by?.name && <>Order taken by {o.taken_by.name}</>}
+                  {o.settled_by_profile?.name && <> · Billed by {o.settled_by_profile.name}{Number(o.discount) > 0 && <span className="text-amber-700 font-medium"> (gave {rupee(Number(o.discount))} discount)</span>}</>}
+                  {o.cancelled_by_profile?.name && <> · Cancelled by {o.cancelled_by_profile.name}{o.cancel_reason ? `: “${o.cancel_reason}”` : ''}</>}
+                </p>
                 {o.feedback_rating && (
                   <p className="mt-1 text-foreground">Feedback: {{ loved: '😍 Loved it', okay: '🙂 Okay', improve: '😕 Needs improvement' }[o.feedback_rating]}{o.feedback_comment ? ` — “${o.feedback_comment}”` : ''}</p>
                 )}

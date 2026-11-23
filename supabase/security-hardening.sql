@@ -29,3 +29,7 @@ language sql security definer stable set search_path = '' as $$
 $$;
 revoke execute on function public.is_admin() from public, anon;
 grant execute on function public.is_admin() to authenticated;
+
+-- Accountability: who billed / cancelled each order
+alter table orders add column if not exists settled_by uuid references profiles(id) on delete set null;
+alter table orders add column if not exists cancelled_by uuid references profiles(id) on delete set null;
