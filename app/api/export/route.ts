@@ -1,12 +1,11 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createClient } from '@/lib/supabase/server';
+import { getAdminUser } from '@/lib/supabase/serverAuth';
 import { formatTimeIST } from '@/lib/time';
 
 export async function GET(request: NextRequest) {
-  const auth = createClient();
-  const { data: { user } } = await auth.auth.getUser();
+  const user = await getAdminUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(request.url);

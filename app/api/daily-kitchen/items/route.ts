@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAuth } from '@/lib/supabase/serverAuth';
 
 /** GET — public; returns active kitchen items */
 export async function GET() {
@@ -18,6 +19,7 @@ export async function GET() {
 
 /** POST — create a new kitchen item */
 export async function POST(request: NextRequest) {
+  if (!(await requireAuth(request))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const body = await request.json().catch(() => null);
   if (!body?.name?.trim()) return NextResponse.json({ error: 'name required' }, { status: 400 });
 

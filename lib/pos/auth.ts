@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireAuth } from '@/lib/supabase/serverAuth';
-import { verifyPosSession } from './session';
+import { STAFF_COOKIE, verifyPosSession } from './session';
 
 export const ADMIN_ROLES = ['admin', 'founder'];
 
@@ -14,7 +14,7 @@ export interface PosActor {
 
 /** Any logged-in POS user: staff with a PIN session, or a signed-in admin. */
 export async function requirePosUser(request: NextRequest): Promise<PosActor | null> {
-  const session = verifyPosSession(request.headers.get('x-pos-session'));
+  const session = verifyPosSession(request.headers.get('x-pos-session')) ?? verifyPosSession(request.cookies.get(STAFF_COOKIE)?.value);
   if (session) {
     return {
       staffId: session.sid,

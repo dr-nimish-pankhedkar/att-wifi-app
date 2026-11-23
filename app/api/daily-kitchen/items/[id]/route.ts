@@ -1,9 +1,11 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAuth } from '@/lib/supabase/serverAuth';
 
 /** PUT — edit item name / unit / sort_order / active */
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+  if (!(await requireAuth(request))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const body = await request.json().catch(() => null);
   if (!body) return NextResponse.json({ error: 'body required' }, { status: 400 });
 
@@ -27,7 +29,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 }
 
 /** DELETE — soft delete (set active = false) */
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+  if (!(await requireAuth(request))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const supabase = createAdminClient();
   const { error } = await supabase
     .from('daily_kitchen_items')

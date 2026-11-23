@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requirePosUser } from '@/lib/pos/auth';
 
 type DenomKey = 'count_500' | 'count_200' | 'count_100' | 'count_50' | 'count_20_note' | 'count_20_coin' | 'count_10_note' | 'count_10_coin';
 
@@ -16,7 +17,11 @@ const DENOM_CONFIG: Array<{ key: DenomKey; value: number }> = [
 ];
 
 export async function POST(request: NextRequest) {
+  const actor = await requirePosUser(request);
+  if (!actor) return NextResponse.json({ error: 'Please enter your PIN again' }, { status: 401 });
   const body = await request.json().catch(() => null);
+  // Who saved it comes from the verified session, not from the request body.
+  if (body) body.staff_id = actor.isAdmin && body.staff_id ? body.staff_id : actor.staffId;
   if (!body?.log_date) {
     return NextResponse.json({ error: 'log_date required' }, { status: 400 });
   }
@@ -83,6 +88,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  if (!(await requirePosUser(request))) return NextResponse.json({ error: 'Please enter your PIN again' }, { status: 401 });
   const { searchParams } = new URL(request.url);
   const from             = searchParams.get('from');
   const to               = searchParams.get('to');

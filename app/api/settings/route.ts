@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createClient } from '@/lib/supabase/server';
+import { getAdminUser } from '@/lib/supabase/serverAuth';
 
 const DEFAULTS = {
   company_name: 'My Company',
@@ -12,6 +12,7 @@ const DEFAULTS = {
 };
 
 export async function GET() {
+  const isAdmin = !!(await getAdminUser());
   const supabase = createAdminClient();
   let { data, error } = await supabase.from('settings').select('*').maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -23,12 +24,15 @@ export async function GET() {
     data = insert.data;
   }
 
+  // The kiosk home screen is public: only branding goes out unless an admin is signed in.
+  if (!isAdmin) {
+    return NextResponse.json({ settings: { company_name: data.company_name, logo_url: data.logo_url } });
+  }
   return NextResponse.json({ settings: data });
 }
 
 export async function PUT(request: NextRequest) {
-  const auth = createClient();
-  const { data: { user } } = await auth.auth.getUser();
+  const user = await getAdminUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json().catch(() => null);

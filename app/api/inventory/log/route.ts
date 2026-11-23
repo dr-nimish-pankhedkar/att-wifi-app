@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requirePosUser } from '@/lib/pos/auth';
 import { requireAuth } from '@/lib/supabase/serverAuth';
 
 /**
@@ -14,12 +15,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'log_date and entries[] are required' }, { status: 400 });
   }
 
-  // logged_by: use staff_id from body (PIN flow) or session user (admin flow)
-  let loggedBy: string | null = body.staff_id ?? null;
-  if (!loggedBy) {
-    const user = await requireAuth(request);
-    if (user) loggedBy = user.id;
-  }
+  // logged_by comes from the verified staff PIN session (or the signed-in admin), never from the body alone.
+  const actor = await requirePosUser(request);
+  if (!actor) return NextResponse.json({ error: 'Please enter your PIN again' }, { status: 401 });
+  const loggedBy: string | null = actor.isAdmin && body.staff_id ? body.staff_id : actor.staffId;
 
   const supabase = createAdminClient();
 

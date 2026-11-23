@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createClient } from '@/lib/supabase/server';
+import { requirePosUser } from '@/lib/pos/auth';
 
 /**
  * POST — staff: save a shift log
@@ -25,23 +25,11 @@ export async function POST(request: NextRequest) {
 
   const supabase = createAdminClient();
 
-  let loggedBy: string | null = body.staff_id ?? null;
-  if (!loggedBy) {
-    try {
-      const auth = createClient();
-      const { data: { user } } = await auth.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        loggedBy = profile?.id ?? null;
-      }
-    } catch { /* non-fatal */ }
-  }
+  const actor = await requirePosUser(request);
+  if (!actor) return NextResponse.json({ error: 'Please enter your PIN again' }, { status: 401 });
+  const loggedBy: string | null = actor.isAdmin && body.staff_id ? body.staff_id : actor.staffId;
 
-  const isAdminOverride = !!body.admin_override;
+  const isAdminOverride = !!body.admin_override && actor.isAdmin;
 
   const newRows = (body.entries as Array<{ item_id: string; quantity: number }>)
     .filter((e) => e.item_id && e.quantity !== undefined && e.quantity !== null && (isAdminOverride ? Number(e.quantity) >= 0 : Number(e.quantity) > 0))
@@ -134,6 +122,7 @@ function addDays(dateStr: string, days: number): string {
  *                               used to carry forward closing across holidays/off days
  */
 export async function GET(request: NextRequest) {
+  if (!(await requirePosUser(request))) return NextResponse.json({ error: 'Please enter your PIN again' }, { status: 401 });
   const { searchParams } = new URL(request.url);
   const closingBefore = searchParams.get('closing-before');
 

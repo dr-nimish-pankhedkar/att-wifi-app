@@ -24,12 +24,16 @@ function b64url(buf: Buffer | string): string {
   return Buffer.from(buf).toString('base64url');
 }
 
-export function signPosSession(data: Omit<PosSession, 'exp'>): { token: string; exp: number } {
-  const exp = Math.floor(Date.now() / 1000) + SESSION_DAYS * 86400;
+export function signPosSession(data: Omit<PosSession, 'exp'>, ttlSeconds = SESSION_DAYS * 86400): { token: string; exp: number } {
+  const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
   const payload = b64url(JSON.stringify({ ...data, exp }));
   const sig = b64url(createHmac('sha256', secret()).update(payload).digest());
   return { token: `${payload}.${sig}`, exp };
 }
+
+/** HttpOnly cookie set after a staff PIN check on the kiosk pages (stock, kitchen log, cash, expenses). */
+export const STAFF_COOKIE = 'staff_session';
+export const STAFF_COOKIE_SECONDS = 12 * 3600;
 
 export function verifyPosSession(token: string | null | undefined): PosSession | null {
   if (!token) return null;

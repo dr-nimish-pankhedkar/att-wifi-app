@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isAllowedIP, getClientIP } from '@/lib/wifi';
 import { todayIST, shiftTimeToday } from '@/lib/time';
+import { pinLocked, recordPinAttempt } from '@/lib/security/rateLimit';
 
 export async function POST(request: NextRequest) {
   const ip = getClientIP(request);
@@ -39,6 +40,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid PIN' }, { status: 400 });
   }
 
+  const locked = await pinLocked(request);
+  if (locked) return NextResponse.json({ error: locked }, { status: 429 });
+
   // Fetch staff profiles
   const { data: profiles, error: profileErr } = await supabase
     .from('profiles')
@@ -53,6 +57,7 @@ export async function POST(request: NextRequest) {
     profiles.map(async (p) => ({ profile: p, ok: await bcrypt.compare(body.pin, p.pin_hash) }))
   );
   const matched = comparisons.find((r) => r.ok)?.profile ?? null;
+  await recordPinAttempt(request, !!matched);
 
   if (!matched) {
     return NextResponse.json({ error: 'Incorrect PIN. Please try again.' }, { status: 401 });

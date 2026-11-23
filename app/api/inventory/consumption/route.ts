@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireAuth } from '@/lib/supabase/serverAuth';
 
 /**
  * GET /api/inventory/consumption?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -11,6 +12,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
  *   consumption = opening - closing  (positive = used, negative = restocked)
  */
 export async function GET(request: NextRequest) {
+  if (!(await requireAuth(request))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { searchParams } = new URL(request.url);
   const from = searchParams.get('from');
   const to   = searchParams.get('to');

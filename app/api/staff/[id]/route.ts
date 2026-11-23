@@ -2,11 +2,10 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createClient } from '@/lib/supabase/server';
+import { getAdminUser } from '@/lib/supabase/serverAuth';
 
 async function requireAdmin() {
-  const auth = createClient();
-  const { data: { user } } = await auth.auth.getUser();
+  const user = await getAdminUser();
   return user;
 }
 

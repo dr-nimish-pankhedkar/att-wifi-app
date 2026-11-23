@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { signPosSession } from '@/lib/pos/session';
+import { pinLocked, recordPinAttempt } from '@/lib/security/rateLimit';
 
 /** Staff PIN → signed POS session token for captain / kitchen devices. */
 export async function POST(request: NextRequest) {
@@ -13,6 +14,9 @@ export async function POST(request: NextRequest) {
   if (typeof pin !== 'string' || !/^\d{4}$/.test(pin)) {
     return NextResponse.json({ error: 'Invalid PIN' }, { status: 400 });
   }
+
+  const locked = await pinLocked(request);
+  if (locked) return NextResponse.json({ error: locked }, { status: 429 });
 
   const supabase = createAdminClient();
   const { data: profiles, error } = await supabase
@@ -24,6 +28,7 @@ export async function POST(request: NextRequest) {
     profiles.map(async (p) => ({ p, ok: p.pin_hash ? await bcrypt.compare(pin, p.pin_hash) : false }))
   );
   const found = results.find((r) => r.ok)?.p;
+  await recordPinAttempt(request, !!found);
   if (!found) return NextResponse.json({ error: 'Incorrect PIN' }, { status: 401 });
 
   const todayIST = new Date().toLocaleString('en-CA', { timeZone: 'Asia/Kolkata' }).split(',')[0];

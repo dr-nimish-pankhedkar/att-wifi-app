@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requirePosUser } from '@/lib/pos/auth';
 import { requireAuth } from '@/lib/supabase/serverAuth';
 
 /**
@@ -13,11 +14,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'amount is required and must be > 0' }, { status: 400 });
   }
 
-  let staffId: string | null = body.staff_id ?? null;
-  if (!staffId) {
-    const user = await requireAuth(request);
-    if (user) staffId = user.id;
-  }
+  const actor = await requirePosUser(request);
+  if (!actor) return NextResponse.json({ error: 'Please enter your PIN again' }, { status: 401 });
+  const staffId: string | null = actor.isAdmin && body.staff_id ? body.staff_id : actor.staffId;
 
   const supabase = createAdminClient();
   const { data, error } = await supabase
