@@ -278,8 +278,12 @@ function OrderScreen({
     setPicking(null);
   }
 
+  // Ask for the customer only until the bill has one.
+  const needsCustomer = !order?.customer_phone;
   async function sendKot() {
     if (!cart.length) return;
+    const digits = customer.phone.replace(/\D/g, '');
+    if (digits && digits.length < 10) { toast.error('Enter a 10-digit phone number or leave it blank'); return; }
     const client_id = uid();
     const body = {
       client_id,
@@ -295,8 +299,16 @@ function OrderScreen({
     };
     setSending(true);
     try {
-      const res = await posApi<{ order: OrderRow }>('/api/pos/orders', { method: 'POST', body: JSON.stringify(body) });
-      setOrder(res.order); setCart([]); setShowCart(false);
+      let res = await posApi<{ order: OrderRow }>('/api/pos/orders', { method: 'POST', body: JSON.stringify(body) });
+      // Customer given on a later round of an existing bill → attach it to that bill.
+      if (order && needsCustomer && (digits || customer.name.trim())) {
+        try {
+          res = await posApi<{ order: OrderRow }>(`/api/pos/orders/${order.id}`, {
+            method: 'PATCH', body: JSON.stringify({ action: 'update', customer_name: customer.name || undefined, customer_phone: digits || undefined }),
+          });
+        } catch { /* items already sent; customer can still be added at billing */ }
+      }
+      setOrder(res.order); setCart([]); setShowCart(false); setCustomer({ name: '', phone: '' });
       toast.success('Sent to kitchen');
       if (target.kind !== 'order') onOpenOrder(res.order.id);
     } catch (e) {
@@ -360,12 +372,6 @@ function OrderScreen({
               ))}
             </div>
           ))}
-        </section>
-      )}
-
-      {!order && !loadingOrder && target.kind !== 'table' && (
-        <section className="m-3">
-          <TakeawayCustomer value={customer} onChange={setCustomer} />
         </section>
       )}
 
@@ -462,6 +468,12 @@ function OrderScreen({
           <div className="flex justify-between text-base font-bold border-t pt-2">
             <span>{cartCount} item{cartCount === 1 ? '' : 's'}</span><span>{rupee(cartTotal)}</span>
           </div>
+          {needsCustomer && (
+            <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+              <p className="text-sm font-medium">Customer name & number <span className="font-normal text-muted-foreground">(for points & offers · optional)</span></p>
+              <TakeawayCustomer value={customer} onChange={setCustomer} />
+            </div>
+          )}
           {order && <p className="text-xs text-muted-foreground -mt-2">This is an add-on to bill #{order.bill_no}; earlier items are already with the kitchen.</p>}
           <div className="grid grid-cols-2 gap-2">
             <Button variant="outline" className="h-12" onClick={() => setShowCart(false)}><Plus className="w-4 h-4 mr-1" /> Add more</Button>
