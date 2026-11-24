@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import PinPad from '@/components/kiosk/PinPad';
 import SuccessModal from '@/components/kiosk/SuccessModal';
 import { formatTimeIST, formatDateIST } from '@/lib/time';
-import { Package, Salad, IndianRupee, Banknote, ClipboardList, ChefHat } from 'lucide-react';
+import { Package, Salad, IndianRupee, Banknote, ClipboardList, ChefHat, Star } from 'lucide-react';
 
 interface CheckinResult {
   name: string;
@@ -108,6 +108,13 @@ export default function KioskPage() {
             Kitchen Screen
           </Link>
         </div>
+        <Link
+          href="/pos/reviews"
+          className="w-full max-w-xs flex items-center justify-center gap-2 bg-green-600 text-white font-semibold rounded-2xl px-4 py-3 text-sm transition-all active:scale-95"
+        >
+          <Star className="w-4 h-4" />
+          Send Google review requests
+        </Link>
         <div className="flex gap-3 w-full max-w-xs">
           <Link
             href="/daily"
