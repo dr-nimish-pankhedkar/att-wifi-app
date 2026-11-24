@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { ArrowLeft, ChefHat, CloudOff, LogOut, Minus, Plus, Receipt, RefreshCw, Search, ShoppingBag, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRightLeft, ChefHat, CloudOff, LogOut, Minus, Plus, Receipt, RefreshCw, Search, ShoppingBag, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import PosLogin from '@/components/pos/PosLogin';
@@ -227,6 +227,8 @@ function OrderScreen({
   const [sending, setSending] = useState(false);
   const [showCart, setShowCart] = useState(false);
   const [settling, setSettling] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const [moveBusy, setMoveBusy] = useState(false);
   // Opened via a table's "Bill" button: jump straight to the bill once the order has loaded.
   const autoBill = useRef(target.kind === 'order' && !!target.openBill);
   useEffect(() => {
@@ -322,6 +324,18 @@ function OrderScreen({
     } finally { setSending(false); }
   }
 
+  async function moveTo(t: PosTable) {
+    if (!order) return;
+    if (!confirm(`Move bill #${order.bill_no} from ${tableName ? `table ${tableName}` : SOURCE_LABEL[source]} to table ${t.name}?`)) return;
+    setMoveBusy(true);
+    try {
+      const res = await posApi<{ order: OrderRow }>(`/api/pos/orders/${order.id}`, { method: 'PATCH', body: JSON.stringify({ action: 'update', table_id: t.id }) });
+      setOrder(res.order); setMoving(false);
+      toast.success(`Moved to table ${t.name}${tableName ? ` · ${tableName} is free now` : ''}`);
+      onOpenOrder(res.order.id); // follow the bill, not the old table
+    } catch (e) { onError(e); } finally { setMoveBusy(false); }
+  }
+
   async function itemAction(id: string, kot_status: string) {
     try { await posApi(`/api/pos/order-items/${id}`, { method: 'PATCH', body: JSON.stringify({ kot_status }) }); loadOrder(); }
     catch (e) { onError(e); }
@@ -342,6 +356,9 @@ function OrderScreen({
           {!onlineHint && <p className="text-xs text-red-600">Offline — new orders will be saved on this phone</p>}
         </div>
         <QuickNav compact onTables={() => onBack()} className="shrink-0" />
+        {order && (
+          <Button size="sm" variant="outline" onClick={() => setMoving(true)} aria-label="Move table"><ArrowRightLeft className="w-4 h-4" /></Button>
+        )}
         {order && (
           <Button size="sm" onClick={() => setSettling(true)}><Receipt className="w-4 h-4 mr-1" /> Bill {rupee(order.total)}</Button>
         )}
@@ -482,6 +499,34 @@ function OrderScreen({
               <ChefHat className="w-4 h-4 mr-1" /> {sending ? 'Sending…' : 'Confirm & send'}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={moving} onOpenChange={setMoving}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Move bill #{order?.bill_no} to…</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">All items, KOTs and the bill move together. {tableName ? `Table ${tableName} becomes free.` : ''}</p>
+          {(floor?.areas ?? []).map((a) => {
+            const busy = new Set((floor?.open_orders ?? []).map((o) => o.table_id));
+            const free = (floor?.tables ?? []).filter((t) => t.area_id === a.id && t.id !== tableId);
+            if (!free.length) return null;
+            return (
+              <div key={a.id}>
+                <p className="text-sm font-semibold text-muted-foreground mb-1">{a.name}</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {free.map((t) => {
+                    const taken = busy.has(t.id);
+                    return (
+                      <button key={t.id} disabled={taken || moveBusy} onClick={() => moveTo(t)}
+                        className={cn('h-14 rounded-xl border-2 font-bold', taken ? 'border-stone-200 text-stone-300' : 'border-stone-900 active:bg-stone-100')}>
+                        {t.name}{taken && <span className="block text-[10px] font-normal">occupied</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </DialogContent>
       </Dialog>
 
