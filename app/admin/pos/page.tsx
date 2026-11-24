@@ -427,6 +427,30 @@ function AddonsTab() {
 
 /* ───────────── Bills ───────────── */
 
+const minsBetween = (a: string, b: string) => Math.max(0, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 60000));
+const fmtMin = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`);
+
+/** Kitchen time per KOT round: from sending the KOT to the last item marked Ready. */
+function kotTimes(o: OrderRow) {
+  const rounds = new Map<number, { start: string; ready: string | null; pending: boolean }>();
+  for (const l of o.order_items ?? []) {
+    if (l.kot_status === 'cancelled') continue;
+    const r = rounds.get(l.kot_round) ?? { start: l.created_at, ready: null, pending: false };
+    if (l.created_at < r.start) r.start = l.created_at;
+    if (l.ready_at) { if (!r.ready || l.ready_at > r.ready) r.ready = l.ready_at; } else r.pending = true;
+    rounds.set(l.kot_round, r);
+  }
+  return Array.from(rounds.entries()).sort((a, b) => a[0] - b[0])
+    .map(([round, r]) => ({ round, mins: r.ready && !r.pending ? minsBetween(r.start, r.ready) : null }));
+}
+
+function timingStats(orders: OrderRow[], alertMin = 20) {
+  const kots = orders.filter((o) => o.status !== 'cancelled').flatMap(kotTimes).map((k) => k.mins).filter((m): m is number => m !== null);
+  const seats = orders.filter((o) => o.status === 'settled' && o.table_id && o.settled_at).map((o) => minsBetween(o.created_at, o.settled_at!));
+  const avg = (a: number[]) => (a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null);
+  return { avgKot: avg(kots), lateKots: kots.filter((m) => m >= alertMin).length, avgTable: avg(seats) };
+}
+
 function BillsTab() {
   const today = new Date().toLocaleString('en-CA', { timeZone: 'Asia/Kolkata' }).split(',')[0];
   const [date, setDate] = useState(today);
@@ -446,14 +470,16 @@ function BillsTab() {
       count: settled.length, total: sum((o) => Number(o.total)), cash: sum((o) => Number(o.cash_amount)), upi: sum((o) => Number(o.upi_amount)),
       online: sum((o) => (o.payment_mode === 'online' ? Number(o.total) : 0)), discount: sum((o) => Number(o.discount)),
       open: orders.filter((o) => o.status === 'open').length, cancelled: orders.filter((o) => o.status === 'cancelled').length,
+      ...timingStats(orders, bill.kot_alert_minutes ?? 20),
     };
-  }, [orders]);
+  }, [orders, bill.kot_alert_minutes]);
 
   return (
     <div className="space-y-4">
       <input type="date" className="rounded-lg border px-3 py-2 text-sm" value={date} max={today} onChange={(e) => setDate(e.target.value)} />
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {[['Sales', rupee(s.total)], ['Bills', String(s.count)], ['Cash', rupee(s.cash)], ['UPI', rupee(s.upi)], ...(AGGREGATORS_IN_POS ? [['Zomato/Swiggy', rupee(s.online)]] : []), ['Discounts', rupee(s.discount)], ['Still open', String(s.open)], ['Cancelled', String(s.cancelled)]].map(([l, v]) => (
+        {[['Sales', rupee(s.total)], ['Bills', String(s.count)], ['Cash', rupee(s.cash)], ['UPI', rupee(s.upi)], ...(AGGREGATORS_IN_POS ? [['Zomato/Swiggy', rupee(s.online)]] : []), ['Discounts', rupee(s.discount)], ['Still open', String(s.open)], ['Cancelled', String(s.cancelled)],
+          ['Avg kitchen time', s.avgKot !== null ? `${s.avgKot} min` : '—'], [`KOTs over ${bill.kot_alert_minutes ?? 20} min`, String(s.lateKots)], ['Avg time on table', s.avgTable !== null ? fmtMin(s.avgTable) : '—']].map(([l, v]) => (
           <div key={l} className="rounded-xl border p-3"><p className="text-xs text-muted-foreground">{l}</p><p className="text-lg font-bold">{v}</p></div>
         ))}
       </div>
@@ -476,6 +502,11 @@ function BillsTab() {
                   </div>
                 ))}
                 {o.customer_phone && <p>Phone: {o.customer_phone}</p>}
+                {(() => {
+                  const k = kotTimes(o); const seat = o.settled_at && o.table_id ? minsBetween(o.created_at, o.settled_at) : null;
+                  if (!k.length && seat === null) return null;
+                  return <p className="text-xs">⏱ {k.map((x) => `KOT ${x.round}: ${x.mins === null ? 'not ready yet' : `${x.mins} min`}`).join(' · ')}{seat !== null && <> · On table {fmtMin(seat)}</>}</p>;
+                })()}
                 <p className="text-xs">
                   {o.taken_by?.name && <>Order taken by {o.taken_by.name}</>}
                   {o.settled_by_profile?.name && <> · Billed by {o.settled_by_profile.name}{Number(o.discount) > 0 && <span className="text-amber-700 font-medium"> (gave {rupee(Number(o.discount))} discount)</span>}</>}
@@ -544,6 +575,10 @@ function BillMessageTab() {
             <input className="w-full rounded-lg border px-3 py-2 text-sm" value={bill.fssai} onChange={(e) => setBill({ ...bill, fssai: e.target.value })} />
           </label>
         </div>
+        <label className="text-sm block">Kitchen alarm if a KOT is not ready within (minutes)
+          <input type="number" min={5} max={90} className="w-full rounded-lg border px-3 py-2 text-sm" value={bill.kot_alert_minutes ?? 20}
+            onChange={(e) => setBill({ ...bill, kot_alert_minutes: Number(e.target.value) })} />
+        </label>
         <label className="text-sm block">Google review link (shown at the top of the WhatsApp message)
           <input className="w-full rounded-lg border px-3 py-2 text-sm" placeholder="https://g.page/r/…/review" value={bill.review_url} onChange={(e) => setBill({ ...bill, review_url: e.target.value })} />
         </label>

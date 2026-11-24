@@ -187,6 +187,7 @@ export default function CaptainPage() {
                       className={cn('absolute inset-0 flex flex-col items-center justify-center', o && 'pb-7')}>
                       <span className="text-lg font-bold">{t.name}</span>
                       {o && <span className="text-xs font-medium">{rupee(o.total)}</span>}
+                      {o && <TableTimer since={o.created_at} />}
                       {o?.ready && <span className="text-[10px] text-green-700 font-semibold animate-pulse">READY</span>}
                     </button>
                     {o && (
@@ -666,6 +667,14 @@ function SettleDialog({ open, order, bill, tableName, onClose, onDone, onError }
       </DialogContent>
     </Dialog>
   );
+}
+
+/** Minutes the table has been occupied (since the first KOT). */
+function TableTimer({ since }: { since: string }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(t); }, []);
+  const m = Math.max(0, Math.floor((now - new Date(since).getTime()) / 60000));
+  return <span className={cn('text-[10px] font-medium', m >= 90 ? 'text-red-600' : 'text-stone-500')}>⏱ {m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`}</span>;
 }
 
 function TakeawayCustomer({ value, onChange }: { value: { name: string; phone: string }; onChange: (v: { name: string; phone: string }) => void }) {

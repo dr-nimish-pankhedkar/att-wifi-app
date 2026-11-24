@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 import { getSession, isNetworkError, posApi, SessionExpired, setSession, type StoredSession } from '@/lib/pos/client';
 import { SOURCE_LABEL, type KotStatus, type OrderSource } from '@/lib/pos/types';
 
-interface TicketItem { id: string; name: string; variation_name: string | null; addons: { name: string }[]; qty: number; note: string | null; kot_status: KotStatus }
+interface TicketItem { id: string; name: string; variation_name: string | null; addons: { name: string }[]; qty: number; note: string | null; kot_status: KotStatus; ready_at?: string | null }
 interface Ticket { key: string; order_id: string; bill_no: number; source: OrderSource; table: string | null; customer_name: string | null; round: number; created_at: string; items: TicketItem[] }
 
 const FALLBACK_POLL_MS = 6000;
@@ -29,6 +29,22 @@ function beep() {
   } catch { /* audio blocked */ }
 }
 
+/** Long, loud ring for a KOT that is running late. */
+function alarm() {
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new Ctx();
+    for (let i = 0; i < 8; i++) {
+      const t = i * 0.3;
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.type = 'square'; o.frequency.value = i % 2 ? 660 : 990; o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.5, ctx.currentTime + t);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.25);
+      o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.25);
+    }
+  } catch { /* audio blocked */ }
+}
+
 function minutesSince(iso: string, now: number) { return Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000)); }
 
 export default function KitchenPage() {
@@ -38,6 +54,7 @@ export default function KitchenPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [online, setOnline] = useState(true);
   const [now, setNow] = useState(Date.now());
+  const [alertMin, setAlertMin] = useState(20);
   const seen = useRef<Set<string> | null>(null);
   const wakeLock = useRef<{ release: () => Promise<void> } | null>(null);
 
@@ -45,7 +62,8 @@ export default function KitchenPage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await posApi<{ tickets: Ticket[] }>('/api/pos/kitchen');
+      const res = await posApi<{ tickets: Ticket[]; alert_minutes?: number }>('/api/pos/kitchen');
+      if (res.alert_minutes) setAlertMin(res.alert_minutes);
       const fresh = res.tickets.filter((t) => t.items.some((i) => i.kot_status === 'new'));
       if (seen.current) {
         if (fresh.some((t) => !seen.current!.has(t.key))) beep();
@@ -69,13 +87,21 @@ export default function KitchenPage() {
   useEffect(() => {
     if (!session || !started) return;
     load();
-    const clock = setInterval(() => setNow(Date.now()), 30000);
+    const clock = setInterval(() => setNow(Date.now()), 15000);
     const vis = () => { if (document.visibilityState === 'visible') { keepAwake(); load(); } };
     document.addEventListener('visibilitychange', vis);
     return () => { clearInterval(clock); document.removeEventListener('visibilitychange', vis); wakeLock.current?.release().catch(() => {}); };
   }, [session, started, load]);
 
   usePosLive(load, !!session && started, FALLBACK_POLL_MS);
+
+  // Ring every ~30 s while any KOT is still not ready after the alert time.
+  const lateCount = tickets.filter((t) => t.items.some((i) => i.kot_status === 'new' || i.kot_status === 'preparing') && minutesSince(t.created_at, now) >= alertMin).length;
+  const lastRing = useRef(0);
+  useEffect(() => {
+    if (!started || !lateCount) return;
+    if (Date.now() - lastRing.current >= 29000) { lastRing.current = Date.now(); alarm(); }
+  }, [now, lateCount, started]);
 
   async function move(t: Ticket, kot_status: 'preparing' | 'ready' | 'served') {
     setTickets((cur) => cur.map((x) => x.key !== t.key ? x : {
@@ -116,6 +142,7 @@ export default function KitchenPage() {
           <QuickNav dark />
         </div>
         <div className="flex items-center gap-3 text-sm">
+          {lateCount > 0 && <span className="rounded-full bg-red-600 px-3 py-1 font-bold animate-pulse">⏰ {lateCount} late (over {alertMin} min)</span>}
           {!online && <span className="flex items-center gap-1 text-red-400"><CloudOff className="w-4 h-4" /> No internet — retrying</span>}
           <span className="text-white/50">{session.staff.name}</span>
           <button onClick={() => { if (confirm('Log out of this device? You will need a PIN to log in again.')) { setSession(null); setSess(null); } }}><LogOut className="w-5 h-5" /></button>
@@ -131,12 +158,17 @@ export default function KitchenPage() {
               <div className="space-y-3">
                 {list.map((t) => {
                   const mins = minutesSince(t.created_at, now);
+                  const late = c.key !== 'ready' && mins >= alertMin;
+                  const readyAt = t.items.map((i) => i.ready_at).filter(Boolean).sort().pop();
+                  const took = readyAt ? Math.max(0, Math.round((new Date(readyAt).getTime() - new Date(t.created_at).getTime()) / 60000)) : null;
                   return (
-                    <div key={t.key} className={cn('rounded-xl p-3 bg-white text-stone-900 border-l-8',
+                    <div key={t.key} className={cn('rounded-xl p-3 bg-white text-stone-900 border-l-8', late && 'ring-4 ring-red-500 animate-pulse',
                       c.key === 'new' && 'border-amber-500', c.key === 'preparing' && 'border-blue-500', c.key === 'ready' && 'border-green-500')}>
                       <div className="flex items-center justify-between">
                         <span className="text-xl font-extrabold">{t.table ?? SOURCE_LABEL[t.source]}</span>
-                        <span className={cn('text-sm font-semibold', mins >= 15 ? 'text-red-600' : 'text-stone-500')}>{mins} min</span>
+                        {c.key === 'ready' && took !== null
+                          ? <span className="text-sm font-semibold text-green-700">made in {took} min</span>
+                          : <span className={cn('text-sm font-semibold', late ? 'text-white bg-red-600 rounded px-2' : mins >= alertMin * 0.75 ? 'text-red-600' : 'text-stone-500')}>{late ? '⏰ ' : ''}{mins} min</span>}
                       </div>
                       <p className="text-xs text-stone-500">#{t.bill_no}{t.round > 1 ? ` · add-on KOT ${t.round}` : ''}{t.customer_name ? ` · ${t.customer_name}` : ''}</p>
                       <ul className="mt-2 space-y-1">
