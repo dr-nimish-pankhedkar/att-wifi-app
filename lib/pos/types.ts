@@ -48,7 +48,7 @@ export function fromPrice(item: MenuItem, source: OrderSource): number {
   return Math.min(...item.variations.map((v) => channelPrice(item, source, v.id)));
 }
 export interface Category { id: string; name: string; sort_order: number; active: boolean }
-export interface BillSettings { title: string; footer: string; address: string; phone: string; fssai: string; review_url: string }
+export interface BillSettings { title: string; footer: string; address: string; phone: string; fssai: string; review_url: string; kot_alert_minutes?: number }
 export interface Menu { categories: Category[]; items: MenuItem[]; addon_groups: AddonGroup[]; bill: BillSettings }
 
 export interface Area { id: string; name: string; sort_order: number; active: boolean }
@@ -66,7 +66,7 @@ export interface CartLineInput {
 export interface OrderItemRow {
   id: string; order_id: string; menu_item_id: string | null; name: string; variation_name: string | null;
   addons: { id: string; name: string; price: number }[]; price: number; qty: number; note: string | null;
-  kot_round: number; kot_status: KotStatus; created_at: string; updated_at: string;
+  kot_round: number; kot_status: KotStatus; created_at: string; updated_at: string; ready_at?: string | null; served_at?: string | null;
 }
 
 export interface OrderRow {

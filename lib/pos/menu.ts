@@ -10,7 +10,7 @@ export async function loadMenu(supabase: SupabaseClient, includeInactive = false
     supabase.from('addon_groups').select('*').order('sort_order'),
     supabase.from('addon_options').select('*').order('sort_order'),
     supabase.from('menu_item_addon_groups').select('*'),
-    supabase.from('settings').select('company_name, bill_title, bill_footer, bill_address, bill_phone, bill_fssai, review_url').limit(1).maybeSingle(),
+    supabase.from('settings').select('company_name, bill_title, bill_footer, bill_address, bill_phone, bill_fssai, review_url, kot_alert_minutes').limit(1).maybeSingle(),
     supabase.from('menu_channel_prices').select('menu_item_id, variation_id, source, price'),
   ]);
   const err = [cats, items, vars, groups, opts, links].find((r) => r.error)?.error;
@@ -39,7 +39,7 @@ export async function loadMenu(supabase: SupabaseClient, includeInactive = false
   const st = settings.data;
   const bill = {
     title: st?.bill_title || st?.company_name || '', footer: st?.bill_footer ?? 'Thank you for visiting!',
-    address: st?.bill_address ?? '', phone: st?.bill_phone ?? '', fssai: st?.bill_fssai ?? '', review_url: st?.review_url ?? '',
+    address: st?.bill_address ?? '', phone: st?.bill_phone ?? '', fssai: st?.bill_fssai ?? '', review_url: st?.review_url ?? '', kot_alert_minutes: st?.kot_alert_minutes ?? 20,
   };
   return { categories, items: menuItems, addon_groups, bill };
 }

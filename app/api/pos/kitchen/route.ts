@@ -11,9 +11,10 @@ import { notifyPos } from '@/lib/pos/notify';
 export async function GET(request: NextRequest) {
   if (!(await requirePosUser(request))) return unauthorized();
   const supabase = createAdminClient();
+  const { data: st } = await supabase.from('settings').select('kot_alert_minutes').limit(1).maybeSingle();
   const { data, error } = await supabase
     .from('order_items')
-    .select('id, order_id, name, variation_name, addons, qty, note, kot_round, kot_status, created_at, orders!inner(bill_no, source, table_id, status, customer_name, pos_tables(name))')
+    .select('id, order_id, name, variation_name, addons, qty, note, kot_round, kot_status, created_at, ready_at, orders!inner(bill_no, source, table_id, status, customer_name, pos_tables(name))')
     .in('kot_status', ['new', 'preparing', 'ready'])
     .eq('orders.status', 'open')
     .order('created_at');
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
     }
     tickets.get(key)!.items.push(r);
   }
-  return NextResponse.json({ tickets: Array.from(tickets.values()), server_time: new Date().toISOString() });
+  return NextResponse.json({ tickets: Array.from(tickets.values()), server_time: new Date().toISOString(), alert_minutes: st?.kot_alert_minutes ?? 20 });
 }
 
 /** POST { order_id, round, kot_status } — move a whole ticket at once. */

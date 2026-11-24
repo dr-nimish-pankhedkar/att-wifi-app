@@ -19,6 +19,7 @@ export async function PATCH(request: NextRequest) {
     bill_address: (body.address ?? '').toString().slice(0, 300) || null,
     bill_phone: (body.phone ?? '').toString().slice(0, 30) || null,
     bill_fssai: (body.fssai ?? '').toString().slice(0, 30) || null,
+    ...(body.kot_alert_minutes !== undefined ? { kot_alert_minutes: Math.min(90, Math.max(5, Math.round(Number(body.kot_alert_minutes) || 20))) } : {}),
     review_url: /^https?:\/\//.test(body.review_url ?? '') ? body.review_url.toString().slice(0, 300) : null,
   }).eq('id', row.id);
   if (error) return bad(error.message, 500);
