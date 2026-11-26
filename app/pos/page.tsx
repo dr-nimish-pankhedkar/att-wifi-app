@@ -725,7 +725,7 @@ function SettleDialog({ open, order, bill, tableName, onClose, onDone, onError }
             ))}
             {ms.progress.map((p) => (
               <p key={p.rule.id} className="text-xs text-muted-foreground">
-                {p.rule.name}: <b className="text-foreground">{Math.min(p.count, p.rule.visits)}/{p.rule.visits}</b> visits ({describeRule(p.rule)}) → {p.rule.reward}. This bill counts as a visit.
+                {p.rule.name}: <b className="text-foreground">{Math.min(p.count, p.rule.visits)}/{p.rule.visits}</b> visits ({describeRule(p.rule)}) → {p.rule.midway_at ? `${p.rule.midway_at}th: ${p.rule.midway_reward}, ${p.rule.visits}th: ${p.rule.reward}` : p.rule.reward}. {p.rule.min_bill ? `A ₹${p.rule.min_bill}+ bill counts as today’s visit.` : 'This bill counts as a visit.'}
               </p>
             ))}
           </div>

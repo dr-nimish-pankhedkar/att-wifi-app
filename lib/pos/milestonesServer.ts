@@ -54,10 +54,21 @@ export async function awardMilestones(supabase: SupabaseClient, customerId: stri
   if (!thisBill) return [];
   const last = await lastRewardDays(supabase, customerId);
   // Only the first qualifying bill of the day can complete a milestone.
-  const rows = rules.filter((rule) => thisBill.total >= rule.min_bill
-      && !visits.some((v) => v.id !== orderId && v.day === today && v.total >= rule.min_bill)
-      && countFor(rule, visits, last.get(rule.id), today) >= rule.visits)
-    .map((rule) => ({ customer_id: customerId, order_id: orderId, rule_id: rule.id, rule_name: rule.name, reward: rule.reward }));
+  const rows: { customer_id: string; order_id: string; rule_id: string; rule_name: string; reward: string }[] = [];
+  for (const rule of rules) {
+    if (thisBill.total < rule.min_bill) continue;
+    if (visits.some((v) => v.id !== orderId && v.day === today && v.total >= rule.min_bill)) continue;
+    const done = last.get(rule.id); // last time the whole trail was completed
+    const count = countFor(rule, visits, done, today);
+    if (count >= rule.visits) {
+      rows.push({ customer_id: customerId, order_id: orderId, rule_id: rule.id, rule_name: rule.name, reward: rule.reward });
+    } else if (rule.midway_at && count >= rule.midway_at) {
+      const mid = last.get(`${rule.id}@mid`);
+      if (!mid || (done && mid <= done)) {
+        rows.push({ customer_id: customerId, order_id: orderId, rule_id: `${rule.id}@mid`, rule_name: `${rule.name} · visit ${rule.midway_at}`, reward: rule.midway_reward || rule.reward });
+      }
+    }
+  }
   if (!rows.length) return [];
   const { data } = await supabase.from('customer_rewards').insert(rows).select('id, rule_id, rule_name, reward, created_at, status');
   return (data ?? []) as CustomerReward[];
