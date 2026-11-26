@@ -5,6 +5,7 @@ export interface MilestoneRule {
   visits: number;        // visits needed
   within_days: number;   // 0 = no time limit (every Nth visit)
   reward: string;        // e.g. "Free cutting chai"
+  min_bill: number;      // a day counts as a visit only with a bill of at least this (0 = any bill)
   enabled: boolean;
 }
 
@@ -21,10 +22,12 @@ export function normaliseMilestones(raw: unknown): MilestoneRule[] {
       visits: Math.min(100, Math.max(2, Math.round(Number(o.visits) || 5))),
       within_days: Math.min(365, Math.max(0, Math.round(Number(o.within_days) || 0))),
       reward: (o.reward ?? '').toString().slice(0, 120) || 'Free treat',
+      min_bill: Math.min(10000, Math.max(0, Math.round(Number(o.min_bill) || 0))),
       enabled: o.enabled !== false,
     };
   });
 }
 
 export const describeRule = (r: MilestoneRule) =>
-  r.within_days ? `${r.visits} visits within ${r.within_days} days` : `every ${r.visits}th visit`;
+  (r.within_days ? `${r.visits} visits within ${r.within_days} days` : `every ${r.visits}th visit`) +
+  (r.min_bill ? ` (bill ₹${r.min_bill}+)` : '');
