@@ -6,6 +6,8 @@ export interface MilestoneRule {
   within_days: number;   // 0 = no time limit (every Nth visit)
   reward: string;        // e.g. "Free cutting chai"
   min_bill: number;      // a day counts as a visit only with a bill of at least this (0 = any bill)
+  midway_at: number;     // optional halfway treat, e.g. 5 on a 10-visit trail (0 = none)
+  midway_reward: string;
   enabled: boolean;
 }
 
@@ -23,8 +25,13 @@ export function normaliseMilestones(raw: unknown): MilestoneRule[] {
       within_days: Math.min(365, Math.max(0, Math.round(Number(o.within_days) || 0))),
       reward: (o.reward ?? '').toString().slice(0, 120) || 'Free treat',
       min_bill: Math.min(10000, Math.max(0, Math.round(Number(o.min_bill) || 0))),
+      midway_at: 0,
+      midway_reward: (o.midway_reward ?? '').toString().slice(0, 120),
       enabled: o.enabled !== false,
     };
+  }).map((r, i) => {
+    const m = Math.round(Number((raw[i] as Partial<MilestoneRule>)?.midway_at) || 0);
+    return { ...r, midway_at: m > 0 && m < r.visits ? m : 0 };
   });
 }
 
