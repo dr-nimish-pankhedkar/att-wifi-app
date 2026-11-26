@@ -2,11 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ChefHat, Home, LayoutGrid } from 'lucide-react';
+import { ChefHat, Home, LayoutGrid, Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
- * Shortcut bar for staff screens: Home · Tables · Kitchen.
+ * Shortcut bar for staff screens: Home · Tables · Kitchen · Dues.
  * `onTables` lets the captain app jump back to the table view without a page reload.
  */
 export default function QuickNav({ dark = false, compact = false, onTables, className }: { dark?: boolean; compact?: boolean; onTables?: () => void; className?: string }) {
@@ -15,6 +15,7 @@ export default function QuickNav({ dark = false, compact = false, onTables, clas
     { href: '/', label: 'Home', icon: Home },
     { href: '/pos', label: 'Tables', icon: LayoutGrid },
     { href: '/kitchen', label: 'Kitchen', icon: ChefHat },
+    { href: '/pos/dues', label: 'Dues', icon: Wallet },
   ];
   return (
     <nav className={cn('flex items-center gap-1', className)}>

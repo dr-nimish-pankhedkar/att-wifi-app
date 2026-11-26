@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: 'Your bill', robots: { index: false, 
 
 const r = (n: number) => `₹${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const TYPE: Record<string, string> = { dine_in: 'Dine-in', takeaway: 'Takeaway', zomato: 'Zomato', swiggy: 'Swiggy' };
-const PAY: Record<string, string> = { cash: 'Cash', upi: 'UPI', split: 'Cash + UPI', online: 'Online (aggregator)' };
+const PAY: Record<string, string> = { cash: 'Cash', upi: 'UPI', split: 'Cash + UPI', online: 'Online (aggregator)', due: 'Pay later (due)' };
 
 interface Line { id: string; name: string; variation_name: string | null; addons: { name: string; price: number }[]; price: number; qty: number; kot_status: string; created_at: string }
 
