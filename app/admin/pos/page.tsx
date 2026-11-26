@@ -686,7 +686,7 @@ function MilestonesSection() {
         </div>
       ))}
       <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={() => setRules([...rules, { id: `m${Date.now().toString(36)}`, name: 'Regulars’ Trail', visits: 10, within_days: 0, reward: 'Free Mocktail or Hot Chocolate', midway_at: 5, midway_reward: 'Free Surti Cold Coco', min_bill: 100, enabled: true }])}>
+        <Button variant="outline" size="sm" onClick={() => setRules([...rules, { id: `m${Date.now().toString(36)}`, name: 'Café Trail', visits: 10, within_days: 30, reward: 'Free Mocktail or Hot Chocolate', midway_at: 5, midway_reward: 'Free Surti Cold Coco', min_bill: 100, enabled: true }])}>
           <Plus className="w-4 h-4 mr-1" /> Add milestone
         </Button>
         <Button size="sm" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save milestones'}</Button>
