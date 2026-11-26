@@ -672,9 +672,10 @@ function MilestonesSection() {
         <p className="text-xs text-muted-foreground">Rewards for regulars, tracked by mobile number. One visit = one day with a paid bill. After a reward, counting starts again.</p>
       </div>
       {rules.map((r, i) => (
-        <div key={r.id} className="rounded-lg border p-3 grid grid-cols-2 sm:grid-cols-6 gap-2 items-end">
+        <div key={r.id} className="rounded-lg border p-3 grid grid-cols-2 sm:grid-cols-7 gap-2 items-end">
           <label className="text-xs sm:col-span-2">Name<input className={cn(inp, 'w-full')} value={r.name} onChange={(e) => upd(i, { name: e.target.value })} /></label>
           <label className="text-xs">Visits<input type="number" min={2} className={cn(inp, 'w-full')} value={r.visits} onChange={(e) => upd(i, { visits: Number(e.target.value) })} /></label>
+          <label className="text-xs">Min bill ₹<input type="number" min={0} className={cn(inp, 'w-full')} value={r.min_bill} onChange={(e) => upd(i, { min_bill: Number(e.target.value) })} /></label>
           <label className="text-xs">Within days<input type="number" min={0} className={cn(inp, 'w-full')} value={r.within_days} onChange={(e) => upd(i, { within_days: Number(e.target.value) })} /></label>
           <label className="text-xs sm:col-span-2">Reward<input className={cn(inp, 'w-full')} value={r.reward} onChange={(e) => upd(i, { reward: e.target.value })} /></label>
           <p className="text-xs text-muted-foreground col-span-2 sm:col-span-4">{describeRule(r)}{r.within_days === 0 ? ' (0 days = no time limit)' : ''}</p>
@@ -683,7 +684,7 @@ function MilestonesSection() {
         </div>
       ))}
       <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={() => setRules([...rules, { id: `m${Date.now().toString(36)}`, name: 'Every 5th visit', visits: 5, within_days: 0, reward: 'Free cutting chai', enabled: true }])}>
+        <Button variant="outline" size="sm" onClick={() => setRules([...rules, { id: `m${Date.now().toString(36)}`, name: 'Regulars card', visits: 8, within_days: 0, reward: 'Free Surti Cold Coco or Classic Shev Pav', min_bill: 100, enabled: true }])}>
           <Plus className="w-4 h-4 mr-1" /> Add milestone
         </Button>
         <Button size="sm" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save milestones'}</Button>

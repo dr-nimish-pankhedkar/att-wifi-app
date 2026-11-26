@@ -10,10 +10,10 @@ export async function getMilestones(supabase: SupabaseClient): Promise<Milestone
 }
 
 async function visitDays(supabase: SupabaseClient, customerId: string) {
-  const { data } = await supabase.from('orders').select('id, settled_at')
+  const { data } = await supabase.from('orders').select('id, settled_at, total')
     .eq('customer_id', customerId).eq('status', 'settled').not('settled_at', 'is', null)
     .order('settled_at', { ascending: false }).limit(2000);
-  return (data ?? []).map((o) => ({ id: o.id as string, day: istDay(o.settled_at as string) }));
+  return (data ?? []).map((o) => ({ id: o.id as string, day: istDay(o.settled_at as string), total: Number(o.total) }));
 }
 
 async function lastRewardDays(supabase: SupabaseClient, customerId: string) {
@@ -24,10 +24,12 @@ async function lastRewardDays(supabase: SupabaseClient, customerId: string) {
   return m;
 }
 
-/** Visits that count towards a rule: days after its last reward, inside its time window. */
-function countFor(rule: MilestoneRule, days: string[], lastReward: string | undefined, today: string) {
+type Visit = { id: string; day: string; total: number };
+
+/** Visits that count towards a rule: days with a big-enough bill, after its last reward, inside its time window. */
+function countFor(rule: MilestoneRule, visits: Visit[], lastReward: string | undefined, today: string) {
   const from = rule.within_days ? istDay(new Date(Date.now() - (rule.within_days - 1) * 86400_000)) : '';
-  return new Set(days.filter((d) => d <= today && (!lastReward || d > lastReward) && (!from || d >= from))).size;
+  return new Set(visits.filter((v) => v.total >= rule.min_bill && v.day <= today && (!lastReward || v.day > lastReward) && (!from || v.day >= from)).map((v) => v.day)).size;
 }
 
 export async function getProgress(supabase: SupabaseClient, customerId: string): Promise<{ progress: MilestoneProgress[]; pending: CustomerReward[] }> {
@@ -36,9 +38,8 @@ export async function getProgress(supabase: SupabaseClient, customerId: string):
     supabase.from('customer_rewards').select('id, rule_id, rule_name, reward, created_at, status').eq('customer_id', customerId).eq('status', 'earned').order('created_at'),
   ]);
   const today = istDay(new Date());
-  const days = visits.map((v) => v.day);
   return {
-    progress: rules.filter((r) => r.enabled).map((rule) => ({ rule, count: countFor(rule, days, last.get(rule.id), today) })),
+    progress: rules.filter((r) => r.enabled).map((rule) => ({ rule, count: countFor(rule, visits, last.get(rule.id), today) })),
     pending: (pending ?? []) as CustomerReward[],
   };
 }
@@ -49,10 +50,13 @@ export async function awardMilestones(supabase: SupabaseClient, customerId: stri
   if (!rules.length) return [];
   const today = istDay(new Date());
   const visits = await visitDays(supabase, customerId);
-  if (visits.some((v) => v.id !== orderId && v.day === today)) return [];
+  const thisBill = visits.find((v) => v.id === orderId);
+  if (!thisBill) return [];
   const last = await lastRewardDays(supabase, customerId);
-  const days = visits.map((v) => v.day);
-  const rows = rules.filter((rule) => countFor(rule, days, last.get(rule.id), today) >= rule.visits)
+  // Only the first qualifying bill of the day can complete a milestone.
+  const rows = rules.filter((rule) => thisBill.total >= rule.min_bill
+      && !visits.some((v) => v.id !== orderId && v.day === today && v.total >= rule.min_bill)
+      && countFor(rule, visits, last.get(rule.id), today) >= rule.visits)
     .map((rule) => ({ customer_id: customerId, order_id: orderId, rule_id: rule.id, rule_name: rule.name, reward: rule.reward }));
   if (!rows.length) return [];
   const { data } = await supabase.from('customer_rewards').insert(rows).select('id, rule_id, rule_name, reward, created_at, status');
