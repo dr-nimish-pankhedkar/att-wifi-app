@@ -9,14 +9,16 @@ import { getProgress } from '@/lib/pos/milestonesServer';
 const UUID = /^[0-9a-f-]{36}$/i;
 
 /** GET — a customer's milestone progress + rewards earned but not yet given. */
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   if (!(await requirePosUser(request))) return unauthorized();
   if (!UUID.test(params.id)) return bad('Bad customer');
   return NextResponse.json(await getProgress(createAdminClient(), params.id));
 }
 
 /** POST { reward_id } — mark a reward as given to the customer. */
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const actor = await requirePosUser(request);
   if (!actor) return unauthorized();
   const { reward_id } = await request.json().catch(() => ({}));
