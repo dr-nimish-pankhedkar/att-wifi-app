@@ -17,6 +17,7 @@ import {
   type QueuedOrder, type StoredSession,
 } from '@/lib/pos/client';
 import { billText, whatsappLink } from '@/lib/pos/billText';
+import { describeRule, type CustomerReward, type MilestoneProgress } from '@/lib/pos/milestones';
 import { AGGREGATORS_IN_POS, channelPrice, fromPrice, rupee, SOURCE_LABEL, type Area, type BillSettings, type Menu, type MenuItem, type OrderRow, type OrderSource, type PaymentMode, type PosTable } from '@/lib/pos/types';
 
 interface OpenOrder { id: string; bill_no: number; source: OrderSource; table_id: string | null; total: number; created_at: string; customer_name: string | null; ready: boolean; pending: boolean }
@@ -565,11 +566,14 @@ function SettleDialog({ open, order, bill, tableName, onClose, onDone, onError }
   const [busy, setBusy] = useState(false);
   const [redeem, setRedeem] = useState(0);
   const [loyaltyResult, setLoyaltyResult] = useState<{ name: string; earned: number; redeemed: number; balance: number } | null>(null);
+  const [newRewards, setNewRewards] = useState<CustomerReward[]>([]);
+  const [given, setGiven] = useState<Set<string>>(new Set());
+  const [ms, setMs] = useState<{ progress: MilestoneProgress[]; pending: CustomerReward[] } | null>(null);
   const dir = useCustomers();
 
   useEffect(() => {
     if (!open) return;
-    setPaid(null); setRedeem(0); setLoyaltyResult(null);
+    setPaid(null); setRedeem(0); setLoyaltyResult(null); setNewRewards([]); setGiven(new Set());
     setDiscount(String(order.discount ?? 0)); setName(order.customer_name ?? ''); setPhone(order.customer_phone ?? '');
     setMode(order.source === 'zomato' || order.source === 'swiggy' ? 'online' : 'upi'); setCash('');
     // Only reset when the dialog opens — background refreshes of the order must not wipe the form.
@@ -579,6 +583,20 @@ function SettleDialog({ open, order, bill, tableName, onClose, onDone, onError }
   const disc = Math.min(Math.max(Number(discount) || 0, 0), subtotal);
   const cfg = dir?.loyalty;
   const known = dir?.customers.find((c) => c.phone === cleanPhone(phone));
+  const knownId = known?.id;
+  useEffect(() => {
+    setMs(null);
+    if (!open || !knownId) return;
+    let live = true;
+    posApi<{ progress: MilestoneProgress[]; pending: CustomerReward[] }>(`/api/pos/customers/${knownId}/rewards`).then((r) => live && setMs(r)).catch(() => {});
+    return () => { live = false; };
+  }, [open, knownId]);
+  async function giveReward(customerId: string, rw: CustomerReward) {
+    try {
+      await posApi(`/api/pos/customers/${customerId}/rewards`, { method: 'POST', body: JSON.stringify({ reward_id: rw.id }) });
+      setGiven((g) => new Set(g).add(rw.id)); toast.success(`Marked given: ${rw.reward}`);
+    } catch (e) { onError(e); }
+  }
   const maxPts = cfg && known ? maxRedeemPoints(cfg, subtotal, disc, known.balance) : 0;
   const usePts = Math.min(redeem, maxPts);
   const redeemRs = cfg && usePts > 0 ? pointsToRupees(cfg, usePts) : 0;
@@ -588,16 +606,17 @@ function SettleDialog({ open, order, bill, tableName, onClose, onDone, onError }
 
   async function settle() {
     if (phone && phone.replace(/\D/g, '').length < 10) { toast.error('Enter a 10-digit phone number or leave it blank'); return; }
+    if (mode === 'due' && (!name.trim() || phone.replace(/\D/g, '').length < 10)) { toast.error('For a due bill, enter the customer’s name and mobile number'); return; }
     setBusy(true);
     try {
-      const res = await posApi<{ order: OrderRow; loyalty: typeof loyaltyResult }>(`/api/pos/orders/${order.id}`, {
+      const res = await posApi<{ order: OrderRow; loyalty: typeof loyaltyResult; rewards?: CustomerReward[] }>(`/api/pos/orders/${order.id}`, {
         method: 'PATCH',
         body: JSON.stringify({
           action: 'settle', payment_mode: mode, discount: disc, customer_name: name, customer_phone: phone, redeem_points: usePts,
           cash_amount: mode === 'split' ? cashN : undefined, upi_amount: mode === 'split' ? Math.round((total - cashN) * 100) / 100 : undefined,
         }),
       });
-      setPaid(res.order); setLoyaltyResult(res.loyalty);
+      setPaid(res.order); setLoyaltyResult(res.loyalty); setNewRewards(res.rewards ?? []);
       forgetCustomers(); // balances changed
     } catch (e) { onError(e); } finally { setBusy(false); }
   }
@@ -620,7 +639,15 @@ function SettleDialog({ open, order, bill, tableName, onClose, onDone, onError }
     return (
       <Dialog open={open} onOpenChange={(o) => !o && onDone(true)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Bill #{paid.bill_no} paid · {rupee(Number(paid.total))}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Bill #{paid.bill_no} {paid.payment_mode === 'due' ? 'saved as DUE' : 'paid'} · {rupee(Number(paid.total))}</DialogTitle></DialogHeader>
+          {paid.payment_mode === 'due' && <p className="text-sm rounded-lg bg-red-50 text-red-800 px-3 py-2">Added to the <b>Dues</b> list under {paid.customer_name}. Collect it from Dues when they pay.</p>}
+          {newRewards.map((rw) => (
+            <div key={rw.id} className="rounded-lg bg-green-50 border border-green-300 px-3 py-2 text-sm flex items-center justify-between gap-2">
+              <span>🎉 <b>{rw.rule_name}</b> unlocked — {rw.reward}</span>
+              {given.has(rw.id) ? <span className="text-xs text-green-700">Given ✓</span>
+                : <Button size="sm" className="h-8" onClick={() => paid.customer_id && giveReward(paid.customer_id, rw)}>Give now</Button>}
+            </div>
+          ))}
           <p className="text-sm text-muted-foreground">{tableName ? `Table ${tableName} is now free.` : 'Order closed.'}</p>
           {loyaltyResult && (
             <p className="text-sm rounded-lg bg-amber-50 px-3 py-2">
@@ -687,16 +714,33 @@ function SettleDialog({ open, order, bill, tableName, onClose, onDone, onError }
             )}
           </div>
         )}
+        {known && ms && (ms.pending.length > 0 || ms.progress.length > 0) && (
+          <div className="rounded-lg border border-green-200 bg-green-50/60 px-3 py-2 text-sm space-y-1">
+            {ms.pending.map((rw) => (
+              <div key={rw.id} className="flex items-center justify-between gap-2">
+                <span>🎁 Reward waiting: <b>{rw.reward}</b></span>
+                {given.has(rw.id) ? <span className="text-xs text-green-700">Given ✓</span>
+                  : <Button size="sm" variant="outline" className="h-8" onClick={() => giveReward(known.id, rw)}>Give now</Button>}
+              </div>
+            ))}
+            {ms.progress.map((p) => (
+              <p key={p.rule.id} className="text-xs text-muted-foreground">
+                {p.rule.name}: <b className="text-foreground">{Math.min(p.count, p.rule.visits)}/{p.rule.visits}</b> visits ({describeRule(p.rule)}) → {p.rule.reward}. This bill counts as a visit.
+              </p>
+            ))}
+          </div>
+        )}
         {cfg?.enabled && willEarn > 0 && <p className="text-xs text-muted-foreground -mt-1">Customer will earn {willEarn} points on this bill.</p>}
 
-        <div className={cn('grid gap-2', AGGREGATORS_IN_POS || order.source === 'zomato' || order.source === 'swiggy' ? 'grid-cols-4' : 'grid-cols-3')}>
-          {((AGGREGATORS_IN_POS || order.source === 'zomato' || order.source === 'swiggy' ? ['cash', 'upi', 'split', 'online'] : ['cash', 'upi', 'split']) as PaymentMode[]).map((m) => (
+        <div className={cn('grid gap-2', AGGREGATORS_IN_POS || order.source === 'zomato' || order.source === 'swiggy' ? 'grid-cols-5' : 'grid-cols-4')}>
+          {((AGGREGATORS_IN_POS || order.source === 'zomato' || order.source === 'swiggy' ? ['cash', 'upi', 'split', 'online', 'due'] : ['cash', 'upi', 'split', 'due']) as PaymentMode[]).map((m) => (
             <button key={m} onClick={() => setMode(m)}
-              className={cn('rounded-lg border py-3 text-sm font-medium capitalize', mode === m ? 'bg-primary text-primary-foreground border-primary' : 'bg-white')}>
-              {m === 'online' ? 'Zomato/Swiggy' : m === 'upi' ? 'UPI' : m}
+              className={cn('rounded-lg border py-3 text-sm font-medium capitalize', mode === m ? (m === 'due' ? 'bg-red-600 text-white border-red-600' : 'bg-primary text-primary-foreground border-primary') : 'bg-white')}>
+              {m === 'online' ? 'Zomato/Swiggy' : m === 'upi' ? 'UPI' : m === 'due' ? 'Due' : m}
             </button>
           ))}
         </div>
+        {mode === 'due' && <p className="text-xs text-red-700 -mt-1">Customer pays later. Name and mobile number are required. The table is freed and the bill goes to the Dues list.</p>}
         {mode === 'split' && (
           <div className="flex items-center gap-2 text-sm">
             <span>Cash ₹</span>
@@ -706,7 +750,7 @@ function SettleDialog({ open, order, bill, tableName, onClose, onDone, onError }
         )}
 
         <Button className="h-12" disabled={busy || lines.length === 0 || (mode === 'split' && (cashN <= 0 || cashN >= total))} onClick={settle}>
-          {busy ? 'Saving…' : `Mark paid · ${rupee(total)}`}
+          {busy ? 'Saving…' : mode === 'due' ? `Save as due · ${rupee(total)}` : `Mark paid · ${rupee(total)}`}
         </Button>
         <button className="text-sm text-red-600" disabled={busy} onClick={cancelOrder}>Cancel whole order</button>
       </DialogContent>

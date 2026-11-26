@@ -9,8 +9,10 @@ import { notifyPos } from '@/lib/pos/notify';
 import { cleanPhone, earnPoints, maxRedeemPoints, pointsToRupees } from '@/lib/pos/loyalty';
 import { getBalance, getLoyaltyConfig, upsertCustomer } from '@/lib/pos/loyaltyServer';
 import type { PaymentMode } from '@/lib/pos/types';
+import { awardMilestones } from '@/lib/pos/milestonesServer';
+import type { CustomerReward } from '@/lib/pos/milestones';
 
-const MODES: PaymentMode[] = ['cash', 'upi', 'split', 'online'];
+const MODES: PaymentMode[] = ['cash', 'upi', 'split', 'online', 'due'];
 
 export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -52,7 +54,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
   if (body.action === 'reopen') {
     if (!actor.isAdmin) return bad('Only an admin can reopen a bill', 403);
     if (order.status !== 'settled') return bad('Only settled bills can be reopened');
-    Object.assign(patch, { status: 'open', settled_at: null, settled_by: null, payment_mode: null, cash_amount: 0, upi_amount: 0, loyalty_redeemed: 0, loyalty_earned: 0 });
+    Object.assign(patch, { status: 'open', settled_at: null, settled_by: null, payment_mode: null, cash_amount: 0, upi_amount: 0, loyalty_redeemed: 0, loyalty_earned: 0, due_paid_at: null, due_paid_mode: null, due_paid_by: null });
     // Undo the points this bill earned/used, and its visit.
     await supabase.from('loyalty_ledger').delete().eq('order_id', order.id);
     if (order.customer_id) {
@@ -113,6 +115,9 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     const mode: PaymentMode = body.payment_mode;
     if (!MODES.includes(mode)) return bad('Choose a payment mode');
     if (totals.subtotal <= 0) return bad('Bill has no items');
+    if (mode === 'due' && (!customerId || !((body.customer_name ?? order.customer_name) ?? '').toString().trim())) {
+      return bad('For a due bill, enter the customer’s name and 10-digit mobile number');
+    }
     let cash = 0, upi = 0;
     if (mode === 'cash') cash = totals.total;
     else if (mode === 'upi') upi = totals.total;
@@ -130,7 +135,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     await supabase.from('order_items').update({ kot_status: 'served' }).eq('order_id', order.id).in('kot_status', ['new', 'preparing', 'ready']);
 
     if (customerId && loyaltyCfg) {
-      const earned = earnPoints(loyaltyCfg, totals);
+      const earned = mode === 'due' ? 0 : earnPoints(loyaltyCfg, totals); // points on a due bill are given when it is paid
       const rows = [];
       if (redeemPoints > 0) rows.push({ customer_id: customerId, order_id: order.id, kind: 'redeem', points: -redeemPoints });
       if (earned > 0) rows.push({
@@ -149,9 +154,14 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     }
   }
 
+  let rewards: CustomerReward[] = [];
+  if (body.action === 'settle' && customerId) {
+    try { rewards = await awardMilestones(supabase, customerId, order.id); } catch { /* never block billing */ }
+  }
+
   const [{ data: fresh }] = await Promise.all([
     supabase.from('orders').select(ORDER_SELECT).eq('id', order.id).single(),
     notifyPos('order'),
   ]);
-  return NextResponse.json({ order: fresh, loyalty: loyaltyResult });
+  return NextResponse.json({ order: fresh, loyalty: loyaltyResult, rewards });
 }

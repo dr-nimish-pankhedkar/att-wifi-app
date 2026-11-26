@@ -13,6 +13,7 @@ import { authFetch } from '@/lib/supabase/authFetch';
 import { cn } from '@/lib/utils';
 import { billText, whatsappLink } from '@/lib/pos/billText';
 import { normaliseLoyalty, type LoyaltyConfig } from '@/lib/pos/loyalty';
+import { describeRule, type MilestoneRule } from '@/lib/pos/milestones';
 import { AGGREGATORS_IN_POS, fromPrice, rupee, SOURCE_LABEL, type BillSettings, type AddonGroup, type Area, type Category, type Menu, type MenuItem, type OrderRow, type PosTable } from '@/lib/pos/types';
 
 type Tab = 'floor' | 'menu' | 'addons' | 'sales' | 'bill' | 'loyalty';
@@ -470,6 +471,7 @@ function BillsTab() {
       count: settled.length, total: sum((o) => Number(o.total)), cash: sum((o) => Number(o.cash_amount)), upi: sum((o) => Number(o.upi_amount)),
       online: sum((o) => (o.payment_mode === 'online' ? Number(o.total) : 0)), discount: sum((o) => Number(o.discount)),
       open: orders.filter((o) => o.status === 'open').length, cancelled: orders.filter((o) => o.status === 'cancelled').length,
+      due: sum((o) => (o.payment_mode === 'due' && !o.due_paid_at ? Number(o.total) : 0)),
       ...timingStats(orders, bill.kot_alert_minutes ?? 20),
     };
   }, [orders, bill.kot_alert_minutes]);
@@ -478,7 +480,7 @@ function BillsTab() {
     <div className="space-y-4">
       <input type="date" className="rounded-lg border px-3 py-2 text-sm" value={date} max={today} onChange={(e) => setDate(e.target.value)} />
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {[['Sales', rupee(s.total)], ['Bills', String(s.count)], ['Cash', rupee(s.cash)], ['UPI', rupee(s.upi)], ...(AGGREGATORS_IN_POS ? [['Zomato/Swiggy', rupee(s.online)]] : []), ['Discounts', rupee(s.discount)], ['Still open', String(s.open)], ['Cancelled', String(s.cancelled)],
+        {[['Sales', rupee(s.total)], ['Bills', String(s.count)], ['Cash', rupee(s.cash)], ['UPI', rupee(s.upi)], ...(AGGREGATORS_IN_POS ? [['Zomato/Swiggy', rupee(s.online)]] : []), ['Discounts', rupee(s.discount)], ['Due (unpaid)', rupee(s.due)], ['Still open', String(s.open)], ['Cancelled', String(s.cancelled)],
           ['Avg kitchen time', s.avgKot !== null ? `${s.avgKot} min` : '—'], [`KOTs over ${bill.kot_alert_minutes ?? 20} min`, String(s.lateKots)], ['Avg time on table', s.avgTable !== null ? fmtMin(s.avgTable) : '—']].map(([l, v]) => (
           <div key={l} className="rounded-xl border p-3"><p className="text-xs text-muted-foreground">{l}</p><p className="text-lg font-bold">{v}</p></div>
         ))}
@@ -651,6 +653,45 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
 
 interface CustomerRow { id: string; phone: string; name: string | null; visits: number; total_spent: number; last_visit_at: string | null; balance: number }
 
+function MilestonesSection() {
+  const [rules, setRules] = useState<MilestoneRule[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api<{ milestones: MilestoneRule[] }>('/api/pos/admin/milestones').then((r) => setRules(r.milestones)).catch(fail); }, []);
+  if (!rules) return null;
+  const upd = (i: number, p: Partial<MilestoneRule>) => setRules(rules.map((r, j) => (j === i ? { ...r, ...p } : r)));
+  async function save() {
+    setBusy(true);
+    try { const r = await api<{ milestones: MilestoneRule[] }>('/api/pos/admin/milestones', 'PUT', { milestones: rules }); setRules(r.milestones); toast.success('Milestones saved'); }
+    catch (e) { fail(e); } finally { setBusy(false); }
+  }
+  const inp = 'rounded-lg border px-2 py-1.5 text-sm';
+  return (
+    <section className="rounded-xl border p-4 space-y-3">
+      <div>
+        <h3 className="font-semibold">Visit milestones</h3>
+        <p className="text-xs text-muted-foreground">Rewards for regulars, tracked by mobile number. One visit = one day with a paid bill. After a reward, counting starts again.</p>
+      </div>
+      {rules.map((r, i) => (
+        <div key={r.id} className="rounded-lg border p-3 grid grid-cols-2 sm:grid-cols-6 gap-2 items-end">
+          <label className="text-xs sm:col-span-2">Name<input className={cn(inp, 'w-full')} value={r.name} onChange={(e) => upd(i, { name: e.target.value })} /></label>
+          <label className="text-xs">Visits<input type="number" min={2} className={cn(inp, 'w-full')} value={r.visits} onChange={(e) => upd(i, { visits: Number(e.target.value) })} /></label>
+          <label className="text-xs">Within days<input type="number" min={0} className={cn(inp, 'w-full')} value={r.within_days} onChange={(e) => upd(i, { within_days: Number(e.target.value) })} /></label>
+          <label className="text-xs sm:col-span-2">Reward<input className={cn(inp, 'w-full')} value={r.reward} onChange={(e) => upd(i, { reward: e.target.value })} /></label>
+          <p className="text-xs text-muted-foreground col-span-2 sm:col-span-4">{describeRule(r)}{r.within_days === 0 ? ' (0 days = no time limit)' : ''}</p>
+          <label className="text-xs flex items-center gap-1"><input type="checkbox" checked={r.enabled} onChange={(e) => upd(i, { enabled: e.target.checked })} /> On</label>
+          <button className="text-xs text-red-600 text-right" onClick={() => setRules(rules.filter((_, j) => j !== i))}>Remove</button>
+        </div>
+      ))}
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={() => setRules([...rules, { id: `m${Date.now().toString(36)}`, name: 'Every 5th visit', visits: 5, within_days: 0, reward: 'Free cutting chai', enabled: true }])}>
+          <Plus className="w-4 h-4 mr-1" /> Add milestone
+        </Button>
+        <Button size="sm" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save milestones'}</Button>
+      </div>
+    </section>
+  );
+}
+
 function LoyaltyTab() {
   const [cfg, setCfg] = useState<LoyaltyConfig | null>(null);
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
@@ -690,6 +731,7 @@ function LoyaltyTab() {
 
   return (
     <div className="space-y-6">
+      <MilestonesSection />
       <section className="rounded-xl border p-4">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-semibold">Loyalty programme</h2>
